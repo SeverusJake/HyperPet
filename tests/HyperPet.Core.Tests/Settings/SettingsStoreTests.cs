@@ -2,8 +2,10 @@ using HyperPet.Core.Settings;
 
 namespace HyperPet.Core.Tests.Settings;
 
-public sealed class SettingsStoreTests
+public sealed class SettingsStoreTests : IDisposable
 {
+    private readonly List<string> _tempDirectories = [];
+
     [Fact]
     public async Task LoadAsync_WhenFileMissing_ReturnsDefaultsAndCreatesFile()
     {
@@ -53,17 +55,79 @@ public sealed class SettingsStoreTests
     {
         var directory = CreateTempDirectory();
         Directory.CreateDirectory(directory);
-        await File.WriteAllTextAsync(Path.Combine(directory, "settings.json"), "{ broken json");
+        var settingsPath = Path.Combine(directory, "settings.json");
+        await File.WriteAllTextAsync(settingsPath, "{ broken json");
         var store = new SettingsStore(directory);
 
         var settings = await store.LoadAsync();
 
         Assert.Equal("Default", settings.SelectedPet);
+        Assert.Equal(8, settings.AlertDurationSeconds);
+        Assert.True(File.Exists(settingsPath));
+        var savedSettings = await store.LoadAsync();
+        Assert.Equal("Default", savedSettings.SelectedPet);
+        Assert.Equal(8, savedSettings.AlertDurationSeconds);
         Assert.True(Directory.GetFiles(directory, "settings.json.corrupt-*").Length == 1);
     }
 
-    private static string CreateTempDirectory()
+    [Fact]
+    public async Task LoadAsync_WhenJsonCorruptRepeatedly_CreatesUniqueBackups()
     {
-        return Path.Combine(Path.GetTempPath(), "HyperPet.Tests", Guid.NewGuid().ToString("N"));
+        var directory = CreateTempDirectory();
+        Directory.CreateDirectory(directory);
+        var settingsPath = Path.Combine(directory, "settings.json");
+        var store = new SettingsStore(directory);
+
+        await File.WriteAllTextAsync(settingsPath, "{ broken json");
+        await store.LoadAsync();
+
+        await File.WriteAllTextAsync(settingsPath, "{ broken json again");
+        await store.LoadAsync();
+
+        Assert.Equal(2, Directory.GetFiles(directory, "settings.json.corrupt-*").Length);
+    }
+
+    [Theory]
+    [InlineData("", 2, "Default", 3)]
+    [InlineData("  ", 31, "Default", 30)]
+    public async Task SaveAsync_WhenSettingsNeedSanitizing_SavesSanitizedCopyWithoutMutatingOriginal(
+        string selectedPet,
+        int alertDurationSeconds,
+        string expectedSelectedPet,
+        int expectedAlertDurationSeconds)
+    {
+        var directory = CreateTempDirectory();
+        var store = new SettingsStore(directory);
+        var settings = new HyperPetSettings
+        {
+            SelectedPet = selectedPet,
+            AlertDurationSeconds = alertDurationSeconds
+        };
+
+        await store.SaveAsync(settings);
+        var actual = await store.LoadAsync();
+
+        Assert.Equal(expectedSelectedPet, actual.SelectedPet);
+        Assert.Equal(expectedAlertDurationSeconds, actual.AlertDurationSeconds);
+        Assert.Equal(selectedPet, settings.SelectedPet);
+        Assert.Equal(alertDurationSeconds, settings.AlertDurationSeconds);
+    }
+
+    public void Dispose()
+    {
+        foreach (var directory in _tempDirectories)
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    private string CreateTempDirectory()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "HyperPet.Tests", Guid.NewGuid().ToString("N"));
+        _tempDirectories.Add(directory);
+        return directory;
     }
 }

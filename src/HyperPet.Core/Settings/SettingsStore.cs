@@ -35,20 +35,30 @@ public sealed class SettingsStore
         }
         catch (JsonException)
         {
-            var backupPath = $"{_settingsPath}.corrupt-{DateTime.Now:yyyyMMddHHmmss}";
+            var backupPath = $"{_settingsPath}.corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfffffff}-{Guid.NewGuid():N}";
             File.Move(_settingsPath, backupPath);
-            return HyperPetSettings.CreateDefault();
+            var defaults = HyperPetSettings.CreateDefault();
+            await SaveAsync(defaults);
+            return defaults;
         }
     }
 
     public async Task SaveAsync(HyperPetSettings settings)
     {
-        settings.SelectedPet = string.IsNullOrWhiteSpace(settings.SelectedPet)
-            ? "Default"
-            : settings.SelectedPet;
-        settings.AlertDurationSeconds = Math.Clamp(settings.AlertDurationSeconds, 3, 30);
+        var sanitized = new HyperPetSettings
+        {
+            SelectedPet = string.IsNullOrWhiteSpace(settings.SelectedPet)
+                ? "Default"
+                : settings.SelectedPet,
+            AlertDurationSeconds = Math.Clamp(settings.AlertDurationSeconds, 3, 30),
+            AlertsPaused = settings.AlertsPaused,
+            ShowFullNotificationContent = settings.ShowFullNotificationContent,
+            StartWithWindows = settings.StartWithWindows,
+            PetLeft = settings.PetLeft,
+            PetTop = settings.PetTop
+        };
 
         await using var stream = File.Create(_settingsPath);
-        await JsonSerializer.SerializeAsync(stream, settings, JsonOptions);
+        await JsonSerializer.SerializeAsync(stream, sanitized, JsonOptions);
     }
 }
