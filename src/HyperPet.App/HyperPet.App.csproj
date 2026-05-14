@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <WindowsSdkPackageVersion>10.0.22621.38</WindowsSdkPackageVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\HyperPet.Core\HyperPet.Core.csproj" />
