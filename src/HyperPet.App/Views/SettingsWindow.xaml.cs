@@ -24,34 +24,32 @@ public partial class SettingsWindow : Window
 
     private void OnCloseClick(object sender, RoutedEventArgs e)
     {
-        bool previousStartWithWindows = _settings.StartWithWindows;
         bool requestedStartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
-
-        _settings.ShowFullNotificationContent = ShowFullContentCheckBox.IsChecked == true;
-        _settings.PetBehaviorMode = PetBehaviorComboBox.SelectedIndex == 1
+        PetBehaviorMode requestedPetBehaviorMode = PetBehaviorComboBox.SelectedIndex == 1
             ? PetBehaviorMode.Desktop
             : PetBehaviorMode.Calm;
-        _settings.AlertDurationSeconds = (int)Math.Round(AlertDurationSlider.Value);
 
-        if (requestedStartWithWindows != previousStartWithWindows)
-        {
-            try
+        bool applied = SettingsWindowSettingsApplier.TryApply(
+            _settings,
+            ShowFullContentCheckBox.IsChecked == true,
+            requestedPetBehaviorMode,
+            (int)Math.Round(AlertDurationSlider.Value),
+            requestedStartWithWindows,
+            _applyStartupSetting,
+            message =>
             {
-                _applyStartupSetting(requestedStartWithWindows);
-                _settings.StartWithWindows = requestedStartWithWindows;
-            }
-            catch (Exception exception)
-            {
-                _settings.StartWithWindows = previousStartWithWindows;
-                StartWithWindowsCheckBox.IsChecked = previousStartWithWindows;
-
+                StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
                 MessageBox.Show(
                     this,
-                    $"HyperPet could not update the Windows startup setting. Startup was left unchanged, but your other settings were applied.\n\n{exception.Message}",
+                    message,
                     "HyperPet Settings",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
-            }
+            });
+
+        if (!applied)
+        {
+            return;
         }
 
         DialogResult = true;
