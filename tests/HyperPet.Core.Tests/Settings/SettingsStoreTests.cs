@@ -93,6 +93,25 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(2, Directory.GetFiles(directory, "settings.json.corrupt-*").Length);
     }
 
+    [Fact]
+    public async Task LoadAsync_WhenPetBehaviorModeIsInvalidNumericValue_ReturnsCalm()
+    {
+        var directory = CreateTempDirectory();
+        Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, "settings.json"), """
+        {
+          "SelectedPet": "miku-kimono",
+          "PetBehaviorMode": 999,
+          "AlertDurationSeconds": 8
+        }
+        """);
+        var store = new SettingsStore(directory);
+
+        var settings = await store.LoadAsync();
+
+        Assert.Equal(PetBehaviorMode.Calm, settings.PetBehaviorMode);
+    }
+
     [Theory]
     [InlineData("", 2, "miku-kimono", 3)]
     [InlineData("  ", 31, "miku-kimono", 30)]

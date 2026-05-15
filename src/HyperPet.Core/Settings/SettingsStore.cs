@@ -31,8 +31,9 @@ public sealed class SettingsStore
         try
         {
             await using var stream = File.OpenRead(_settingsPath);
-            return await JsonSerializer.DeserializeAsync<HyperPetSettings>(stream, JsonOptions).ConfigureAwait(false)
+            var settings = await JsonSerializer.DeserializeAsync<HyperPetSettings>(stream, JsonOptions).ConfigureAwait(false)
                 ?? HyperPetSettings.CreateDefault();
+            return Sanitize(settings);
         }
         catch (JsonException)
         {

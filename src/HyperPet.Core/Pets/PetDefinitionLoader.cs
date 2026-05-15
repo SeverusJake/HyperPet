@@ -17,7 +17,12 @@ public static class PetDefinitionLoader
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException("Pet metadata is empty.");
 
-        var states = new Dictionary<string, PetAnimationState>(file.States, StringComparer.OrdinalIgnoreCase);
+        Validate(file);
+
+        var states = file.States.ToDictionary(
+            state => state.Key,
+            state => state.Value!,
+            StringComparer.OrdinalIgnoreCase);
         if (states.Count == 0)
         {
             throw new InvalidOperationException("Pet metadata must define at least one animation state.");
@@ -39,6 +44,52 @@ public static class PetDefinitionLoader
         };
     }
 
+    private static void Validate(PetDefinitionFile file)
+    {
+        if (file.FrameWidth <= 0)
+        {
+            throw new InvalidOperationException("Pet metadata frameWidth must be greater than zero.");
+        }
+
+        if (file.FrameHeight <= 0)
+        {
+            throw new InvalidOperationException("Pet metadata frameHeight must be greater than zero.");
+        }
+
+        if (string.IsNullOrWhiteSpace(file.SpritesheetPath))
+        {
+            throw new InvalidOperationException("Pet metadata spritesheetPath must not be empty.");
+        }
+
+        if (file.States is null || file.States.Count == 0)
+        {
+            throw new InvalidOperationException("Pet metadata must define at least one animation state.");
+        }
+
+        foreach ((string stateName, PetAnimationState? state) in file.States)
+        {
+            if (state is null)
+            {
+                throw new InvalidOperationException($"Pet metadata state '{stateName}' must not be null.");
+            }
+
+            if (state.Row < 0)
+            {
+                throw new InvalidOperationException($"Pet metadata state '{stateName}' row must be greater than or equal to zero.");
+            }
+
+            if (state.Frames <= 0)
+            {
+                throw new InvalidOperationException($"Pet metadata state '{stateName}' frames must be greater than zero.");
+            }
+
+            if (state.Fps <= 0)
+            {
+                throw new InvalidOperationException($"Pet metadata state '{stateName}' fps must be greater than zero.");
+            }
+        }
+    }
+
     private sealed class PetDefinitionFile
     {
         public string Id { get; set; } = string.Empty;
@@ -48,6 +99,6 @@ public static class PetDefinitionLoader
         public string Kind { get; set; } = "person";
         public int FrameWidth { get; set; }
         public int FrameHeight { get; set; }
-        public Dictionary<string, PetAnimationState> States { get; set; } = [];
+        public Dictionary<string, PetAnimationState?> States { get; set; } = [];
     }
 }
