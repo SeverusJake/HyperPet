@@ -5,8 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="HyperPet"
-        Width="320"
-        Height="220"
+        Width="390"
+        Height="260"
         AllowsTransparency="True"
         Background="Transparent"
         ResizeMode="NoResize"
@@ -60,21 +60,12 @@
             </StackPanel>
         </Border>
 
-        <Border Width="96"
-                Height="96"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Bottom"
-                Background="#FFFFD166"
-                BorderBrush="#FF1D3557"
-                BorderThickness="3"
-                CornerRadius="48">
-            <TextBlock x:Name="PetFace"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       FontSize="32"
-                       FontWeight="Bold"
-                       Foreground="#FF1D3557"
-                       Text="^_^" />
-        </Border>
+        <Image x:Name="PetImage"
+               Width="128"
+               Height="208"
+               HorizontalAlignment="Right"
+               VerticalAlignment="Bottom"
+               RenderOptions.BitmapScalingMode="NearestNeighbor"
+               Stretch="None" />
     </Grid>
 </Window>

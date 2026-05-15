@@ -1,9 +1,11 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using HyperPet.App.Pets;
 using HyperPet.Core.Settings;
 using HyperPet.App.ViewModels;
 using HyperPet.Core.Pet;
+using HyperPet.Core.Pets;
 using HyperPet.App.Views;
 
 namespace HyperPet.App;
@@ -15,8 +17,18 @@ public partial class MainWindow : Window
     private readonly Action<bool> _applyStartupSetting;
     private readonly Action _saveSettings;
     private readonly DispatcherTimer _alertTimer = new();
+    private readonly DispatcherTimer _calmTimer = new();
+    private readonly DispatcherTimer _movementTimer = new();
+    private readonly Random _random = new();
+    private readonly PetAnimator? _petAnimator;
+    private bool _movingRight = true;
+    private bool _alertActive;
 
-    public MainWindow(HyperPetSettings settings, Action<bool> applyStartupSetting, Action saveSettings)
+    public MainWindow(
+        HyperPetSettings settings,
+        Action<bool> applyStartupSetting,
+        Action saveSettings,
+        SpritePet? spritePet)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -33,6 +45,17 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
 
         _alertTimer.Tick += (_, _) => DismissAlert();
+        _calmTimer.Tick += OnCalmTimerTick;
+        _movementTimer.Tick += OnMovementTimerTick;
+
+        if (spritePet is null)
+        {
+            PetImage.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _petAnimator = new PetAnimator(spritePet, PetImage);
+        StartBehaviorMode();
     }
 
     public void ShowAlert(PetAlert alert)
@@ -43,10 +66,13 @@ public partial class MainWindow : Window
         }
 
         _viewModel.CurrentAlert = alert;
+        _alertActive = true;
         BubbleAppName.Text = alert.AppName;
         BubbleTitle.Text = alert.Title;
         BubbleBody.Text = alert.Body;
         Bubble.Visibility = Visibility.Visible;
+        StopBehaviorTimers();
+        _petAnimator?.Play("waving");
 
         _alertTimer.Stop();
         _alertTimer.Interval = TimeSpan.FromSeconds(_settings.AlertDurationSeconds);
@@ -57,10 +83,88 @@ public partial class MainWindow : Window
     {
         _alertTimer.Stop();
         _viewModel.CurrentAlert = null;
+        _alertActive = false;
         Bubble.Visibility = Visibility.Collapsed;
         BubbleAppName.Text = string.Empty;
         BubbleTitle.Text = string.Empty;
         BubbleBody.Text = string.Empty;
+        StartBehaviorMode();
+    }
+
+    private void StartBehaviorMode()
+    {
+        if (_petAnimator is null || _alertActive)
+        {
+            return;
+        }
+
+        StopBehaviorTimers();
+
+        if (_settings.PetBehaviorMode == PetBehaviorMode.Desktop)
+        {
+            StartDesktopMode();
+            return;
+        }
+
+        StartCalmMode();
+    }
+
+    private void StartCalmMode()
+    {
+        _movementTimer.Stop();
+        _petAnimator?.Play("idle");
+        _calmTimer.Interval = TimeSpan.FromSeconds(6);
+        _calmTimer.Start();
+    }
+
+    private void StartDesktopMode()
+    {
+        _calmTimer.Stop();
+        _petAnimator?.Play(_movingRight ? "runRight" : "runLeft");
+        _movementTimer.Interval = TimeSpan.FromMilliseconds(33);
+        _movementTimer.Start();
+    }
+
+    private void StopBehaviorTimers()
+    {
+        _calmTimer.Stop();
+        _movementTimer.Stop();
+    }
+
+    private void OnCalmTimerTick(object? sender, EventArgs e)
+    {
+        _petAnimator?.Play(_random.NextDouble() < 0.25 ? "waiting" : "idle");
+    }
+
+    private void OnMovementTimerTick(object? sender, EventArgs e)
+    {
+        Rect workArea = SystemParameters.WorkArea;
+        double windowWidth = ActualWidth > 0 ? ActualWidth : Width;
+        double nextLeft = Left + (_movingRight ? 2 : -2);
+
+        if (nextLeft <= workArea.Left)
+        {
+            nextLeft = workArea.Left;
+            SetMovementDirection(true);
+        }
+        else if (nextLeft + windowWidth >= workArea.Right)
+        {
+            nextLeft = workArea.Right - windowWidth;
+            SetMovementDirection(false);
+        }
+
+        Left = nextLeft;
+    }
+
+    private void SetMovementDirection(bool movingRight)
+    {
+        if (_movingRight == movingRight)
+        {
+            return;
+        }
+
+        _movingRight = movingRight;
+        _petAnimator?.Play(_movingRight ? "runRight" : "runLeft");
     }
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

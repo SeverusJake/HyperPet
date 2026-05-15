@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using HyperPet.App.Pets;
 using HyperPet.App.Views;
 using HyperPet.Core.Notifications;
 using HyperPet.Core.Pet;
@@ -44,8 +45,9 @@ public partial class App : Application
         var petController = new PetController();
         var notificationDedupe = new NotificationDedupe();
         var notificationListener = new WindowsNotificationListener();
+        SpritePet? spritePet = await TryLoadSpritePetAsync();
 
-        _mainWindow = new MainWindow(_settings, ApplyStartupSetting, SaveSettings)
+        _mainWindow = new MainWindow(_settings, ApplyStartupSetting, SaveSettings, spritePet)
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
@@ -203,6 +205,25 @@ public partial class App : Application
                 petController,
                 settings,
                 _shutdownCts.Token));
+    }
+
+    private static async Task<SpritePet?> TryLoadSpritePetAsync()
+    {
+        string petDirectory = Path.Combine(
+            AppContext.BaseDirectory,
+            "Assets",
+            "Pets",
+            "miku-kimono.codex-pet");
+
+        try
+        {
+            return await SpritePetLoader.LoadAsync(petDirectory);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Could not load sprite pet from '{petDirectory}': {exception}");
+            return null;
+        }
     }
 
     private void ApplyStartupSetting(bool enabled)
