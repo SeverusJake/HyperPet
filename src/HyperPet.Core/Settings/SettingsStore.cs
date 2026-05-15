@@ -23,14 +23,14 @@ public sealed class SettingsStore
         if (!File.Exists(_settingsPath))
         {
             var defaults = HyperPetSettings.CreateDefault();
-            await SaveAsync(defaults);
+            await SaveAsync(defaults).ConfigureAwait(false);
             return defaults;
         }
 
         try
         {
             await using var stream = File.OpenRead(_settingsPath);
-            return await JsonSerializer.DeserializeAsync<HyperPetSettings>(stream, JsonOptions)
+            return await JsonSerializer.DeserializeAsync<HyperPetSettings>(stream, JsonOptions).ConfigureAwait(false)
                 ?? HyperPetSettings.CreateDefault();
         }
         catch (JsonException)
@@ -38,14 +38,30 @@ public sealed class SettingsStore
             var backupPath = $"{_settingsPath}.corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfffffff}-{Guid.NewGuid():N}";
             File.Move(_settingsPath, backupPath);
             var defaults = HyperPetSettings.CreateDefault();
-            await SaveAsync(defaults);
+            await SaveAsync(defaults).ConfigureAwait(false);
             return defaults;
         }
     }
 
     public async Task SaveAsync(HyperPetSettings settings)
     {
-        var sanitized = new HyperPetSettings
+        var sanitized = Sanitize(settings);
+
+        await using var stream = File.Create(_settingsPath);
+        await JsonSerializer.SerializeAsync(stream, sanitized, JsonOptions).ConfigureAwait(false);
+    }
+
+    public void Save(HyperPetSettings settings)
+    {
+        var sanitized = Sanitize(settings);
+
+        using var stream = File.Create(_settingsPath);
+        JsonSerializer.Serialize(stream, sanitized, JsonOptions);
+    }
+
+    private static HyperPetSettings Sanitize(HyperPetSettings settings)
+    {
+        return new HyperPetSettings
         {
             SelectedPet = string.IsNullOrWhiteSpace(settings.SelectedPet)
                 ? "Default"
@@ -57,8 +73,5 @@ public sealed class SettingsStore
             PetLeft = settings.PetLeft,
             PetTop = settings.PetTop
         };
-
-        await using var stream = File.Create(_settingsPath);
-        await JsonSerializer.SerializeAsync(stream, sanitized, JsonOptions);
     }
 }

@@ -25,8 +25,19 @@ public partial class App : Application
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "HyperPet");
 
-        _settingsStore = new SettingsStore(settingsDirectory);
-        _settings = await _settingsStore.LoadAsync();
+        Exception? settingsLoadException = null;
+
+        try
+        {
+            _settingsStore = new SettingsStore(settingsDirectory);
+            _settings = await _settingsStore.LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Could not load HyperPet settings: {exception}");
+            settingsLoadException = exception;
+            _settings = HyperPetSettings.CreateDefault();
+        }
 
         var petController = new PetController();
         var notificationDedupe = new NotificationDedupe();
@@ -38,6 +49,16 @@ public partial class App : Application
             Top = _settings.PetTop
         };
         _mainWindow.Show();
+
+        if (settingsLoadException is not null)
+        {
+            MessageBox.Show(
+                _mainWindow,
+                "HyperPet could not load your saved settings, so default settings were used for this session.",
+                "HyperPet Settings",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
 
         NotificationAccessStatus accessStatus;
         try
@@ -79,7 +100,7 @@ public partial class App : Application
 
             try
             {
-                _settingsStore.SaveAsync(_settings).GetAwaiter().GetResult();
+                _settingsStore.Save(_settings);
             }
             catch (Exception exception)
             {
