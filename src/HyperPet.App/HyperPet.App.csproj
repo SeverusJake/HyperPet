@@ -13,5 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\Pets\Default\*.png" />
+    <Resource Include="Assets\Package\*.png" />
+    <None Include="Package.appxmanifest" />
   </ItemGroup>
 </Project>

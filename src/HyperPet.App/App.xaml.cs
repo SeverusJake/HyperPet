@@ -62,33 +62,31 @@ public partial class App : Application
                 MessageBoxImage.Warning);
         }
 
-        NotificationAccessStatus accessStatus;
-        try
-        {
-            accessStatus = await notificationListener.RequestAccessAsync(_shutdownCts.Token);
-        }
-        catch (OperationCanceledException) when (_shutdownCts.IsCancellationRequested)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            Debug.WriteLine($"Could not request notification access: {exception}");
-            accessStatus = NotificationAccessStatus.Unspecified;
-        }
+        NotificationAccessStatus accessStatus = await TryRequestNotificationAccessAsync(notificationListener);
 
         if (accessStatus != NotificationAccessStatus.Allowed)
         {
-            var setupWindow = new SetupWindow(() => notificationListener.RequestAccessAsync(_shutdownCts.Token))
+            var setupWindow = new SetupWindow(async () =>
+            {
+                NotificationAccessStatus setupAccessStatus =
+                    await TryRequestNotificationAccessAsync(notificationListener);
+
+                if (setupAccessStatus == NotificationAccessStatus.Allowed)
+                {
+                    StartMonitoring(notificationListener, notificationDedupe, petController, _settings);
+                }
+
+                return setupAccessStatus;
+            })
             {
                 Owner = _mainWindow
             };
+
             setupWindow.Show();
             return;
         }
 
-        _monitorTask = Task.Run(
-            () => MonitorNotificationsAsync(notificationListener, notificationDedupe, petController, _settings, _shutdownCts.Token));
+        StartMonitoring(notificationListener, notificationDedupe, petController, _settings);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -167,6 +165,44 @@ public partial class App : Application
                 }
             }
         }
+    }
+
+    private async Task<NotificationAccessStatus> TryRequestNotificationAccessAsync(
+        INotificationListener notificationListener)
+    {
+        try
+        {
+            return await notificationListener.RequestAccessAsync(_shutdownCts.Token);
+        }
+        catch (OperationCanceledException) when (_shutdownCts.IsCancellationRequested)
+        {
+            return NotificationAccessStatus.Unspecified;
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Could not request notification access: {exception}");
+            return NotificationAccessStatus.Unspecified;
+        }
+    }
+
+    private void StartMonitoring(
+        INotificationListener notificationListener,
+        NotificationDedupe notificationDedupe,
+        PetController petController,
+        HyperPetSettings settings)
+    {
+        if (_monitorTask is not null || _shutdownCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _monitorTask = Task.Run(
+            () => MonitorNotificationsAsync(
+                notificationListener,
+                notificationDedupe,
+                petController,
+                settings,
+                _shutdownCts.Token));
     }
 
     private void ApplyStartupSetting(bool enabled)

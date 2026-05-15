@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using HyperPet.Core.Notifications;
 using Windows.UI.Notifications;
 using Windows.UI.Notifications.Management;
@@ -46,31 +47,39 @@ public sealed class WindowsNotificationListener : INotificationListener
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            string appUserModelId = notification.AppInfo.AppUserModelId ?? string.Empty;
-            string appName = notification.AppInfo.DisplayInfo.DisplayName;
-            if (string.IsNullOrWhiteSpace(appName))
+            try
             {
-                appName = string.IsNullOrWhiteSpace(appUserModelId) ? "Unknown app" : appUserModelId;
+                string appUserModelId = notification.AppInfo.AppUserModelId ?? string.Empty;
+                string appName = notification.AppInfo.DisplayInfo.DisplayName;
+                if (string.IsNullOrWhiteSpace(appName))
+                {
+                    appName = string.IsNullOrWhiteSpace(appUserModelId) ? "Unknown app" : appUserModelId;
+                }
+
+                IReadOnlyList<string> textElements = ExtractToastGenericText(notification.Notification);
+
+                string title = textElements.Count > 0 ? textElements[0] : "Notification";
+                string body = textElements.Count > 1
+                    ? string.Join(Environment.NewLine, textElements.Skip(1))
+                    : string.Empty;
+                string sourceId = string.Join(
+                    ':',
+                    appUserModelId,
+                    notification.Id.ToString(),
+                    notification.CreationTime.ToUnixTimeMilliseconds().ToString());
+
+                hyperNotifications.Add(new HyperNotification(
+                    sourceId,
+                    appName,
+                    title,
+                    body,
+                    notification.CreationTime,
+                    canActivate: false));
             }
-            IReadOnlyList<string> textElements = ExtractToastGenericText(notification.Notification);
-
-            string title = textElements.Count > 0 ? textElements[0] : "Notification";
-            string body = textElements.Count > 1
-                ? string.Join(Environment.NewLine, textElements.Skip(1))
-                : string.Empty;
-            string sourceId = string.Join(
-                ':',
-                appUserModelId,
-                notification.Id.ToString(),
-                notification.CreationTime.ToUnixTimeMilliseconds().ToString());
-
-            hyperNotifications.Add(new HyperNotification(
-                sourceId,
-                appName,
-                title,
-                body,
-                notification.CreationTime,
-                canActivate: false));
+            catch (Exception exception)
+            {
+                Debug.WriteLine($"Could not parse Windows notification {notification.Id}: {exception}");
+            }
         }
 
         return hyperNotifications;

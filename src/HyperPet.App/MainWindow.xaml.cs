@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using HyperPet.Core.Settings;
 using HyperPet.App.ViewModels;
 using HyperPet.Core.Pet;
@@ -13,6 +14,7 @@ public partial class MainWindow : Window
     private readonly HyperPetSettings _settings;
     private readonly Action<bool> _applyStartupSetting;
     private readonly Action _saveSettings;
+    private readonly DispatcherTimer _alertTimer = new();
 
     public MainWindow(HyperPetSettings settings, Action<bool> applyStartupSetting, Action saveSettings)
     {
@@ -29,6 +31,8 @@ public partial class MainWindow : Window
             AlertsPaused = settings.AlertsPaused
         };
         DataContext = _viewModel;
+
+        _alertTimer.Tick += (_, _) => DismissAlert();
     }
 
     public void ShowAlert(PetAlert alert)
@@ -43,10 +47,15 @@ public partial class MainWindow : Window
         BubbleTitle.Text = alert.Title;
         BubbleBody.Text = alert.Body;
         Bubble.Visibility = Visibility.Visible;
+
+        _alertTimer.Stop();
+        _alertTimer.Interval = TimeSpan.FromSeconds(_settings.AlertDurationSeconds);
+        _alertTimer.Start();
     }
 
     public void DismissAlert()
     {
+        _alertTimer.Stop();
         _viewModel.CurrentAlert = null;
         Bubble.Visibility = Visibility.Collapsed;
         BubbleAppName.Text = string.Empty;
