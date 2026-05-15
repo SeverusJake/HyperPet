@@ -46,13 +46,24 @@ public partial class MainWindow : Window
         if (e.ClickCount == 2)
         {
             DismissAlert();
+            e.Handled = true;
             return;
         }
 
-        if (e.ClickCount == 1)
+        if (e.ButtonState != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        try
         {
             DragMove();
         }
+        catch (InvalidOperationException)
+        {
+        }
+
+        e.Handled = true;
     }
 
     private void OnPauseAlertsClick(object sender, RoutedEventArgs e)

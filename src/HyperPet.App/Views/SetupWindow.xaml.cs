@@ -5,13 +5,14 @@ namespace HyperPet.App.Views;
 
 public partial class SetupWindow : Window
 {
-    private readonly Func<Task<NotificationAccessStatus>>? _requestAccessAsync;
+    private readonly Func<Task<NotificationAccessStatus>> _requestAccessAsync;
 
     public SetupWindow(Func<Task<NotificationAccessStatus>>? requestAccessAsync = null)
     {
         InitializeComponent();
 
-        _requestAccessAsync = requestAccessAsync;
+        _requestAccessAsync = requestAccessAsync
+            ?? (() => Task.FromResult(NotificationAccessStatus.Unspecified));
     }
 
     private async void OnRequestAccessClick(object sender, RoutedEventArgs e)
@@ -21,13 +22,15 @@ public partial class SetupWindow : Window
 
         try
         {
-            NotificationAccessStatus status = _requestAccessAsync is null
-                ? NotificationAccessStatus.Unspecified
-                : await _requestAccessAsync();
+            NotificationAccessStatus status = await _requestAccessAsync();
 
             StatusText.Text = status == NotificationAccessStatus.Allowed
                 ? "Notification access is allowed."
-                : "Notification access is not allowed.";
+                : "Notification access could not be checked or is not enabled.";
+        }
+        catch
+        {
+            StatusText.Text = "Could not request permission. Check Windows notification settings.";
         }
         finally
         {
