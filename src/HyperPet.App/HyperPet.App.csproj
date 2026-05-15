@@ -16,7 +16,10 @@
     <ProjectReference Include="..\HyperPet.Windows\HyperPet.Windows.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Assets\Pets\Default\*.png" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\Pets\**\*.*" />
     <Resource Include="Assets\Package\*.png" />
     <None Include="Package.appxmanifest" />
   </ItemGroup>
