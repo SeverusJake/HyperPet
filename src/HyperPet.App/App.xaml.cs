@@ -6,12 +6,14 @@ using HyperPet.Core.Notifications;
 using HyperPet.Core.Pet;
 using HyperPet.Core.Settings;
 using HyperPet.Windows.Notifications;
+using HyperPet.Windows.Startup;
 
 namespace HyperPet.App;
 
 public partial class App : Application
 {
     private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly StartupService _startupService = new();
     private SettingsStore? _settingsStore;
     private HyperPetSettings? _settings;
     private MainWindow? _mainWindow;
@@ -43,7 +45,7 @@ public partial class App : Application
         var notificationDedupe = new NotificationDedupe();
         var notificationListener = new WindowsNotificationListener();
 
-        _mainWindow = new MainWindow
+        _mainWindow = new MainWindow(_settings, ApplyStartupSetting)
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
@@ -165,5 +167,16 @@ public partial class App : Application
                 }
             }
         }
+    }
+
+    private void ApplyStartupSetting(bool enabled)
+    {
+        string? executablePath = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            throw new InvalidOperationException("HyperPet could not find the executable path for this session.");
+        }
+
+        _startupService.SetEnabled(enabled, executablePath);
     }
 }
