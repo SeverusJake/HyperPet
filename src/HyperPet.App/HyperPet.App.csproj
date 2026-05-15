@@ -19,7 +19,8 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Assets\Pets\**\*.*" />
+    <None Remove="Assets\Pets\**\*.*" />
+    <Content Include="Assets\Pets\**\*.*" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="Assets\Package\*.png" />
     <None Include="Package.appxmanifest" />
   </ItemGroup>
