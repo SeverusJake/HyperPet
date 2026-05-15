@@ -52,6 +52,7 @@ public partial class App : Application
             Left = _settings.PetLeft,
             Top = _settings.PetTop
         };
+        _mainWindow.ClampToWorkArea();
         _mainWindow.Show();
 
         if (settingsLoadException is not null)

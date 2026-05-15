@@ -47,6 +47,7 @@ public partial class MainWindow : Window
         _alertTimer.Tick += (_, _) => DismissAlert();
         _calmTimer.Tick += OnCalmTimerTick;
         _movementTimer.Tick += OnMovementTimerTick;
+        Loaded += (_, _) => ClampToWorkArea();
 
         if (spritePet is null)
         {
@@ -117,6 +118,18 @@ public partial class MainWindow : Window
         _calmTimer.Start();
     }
 
+    public void ClampToWorkArea()
+    {
+        Rect workArea = SystemParameters.WorkArea;
+        double windowWidth = GetWindowWidth();
+        double windowHeight = GetWindowHeight();
+        double maxLeft = Math.Max(workArea.Left, workArea.Right - windowWidth);
+        double maxTop = Math.Max(workArea.Top, workArea.Bottom - windowHeight);
+
+        Left = Math.Clamp(Left, workArea.Left, maxLeft);
+        Top = Math.Clamp(Top, workArea.Top, maxTop);
+    }
+
     private void StartDesktopMode()
     {
         _calmTimer.Stop();
@@ -139,7 +152,7 @@ public partial class MainWindow : Window
     private void OnMovementTimerTick(object? sender, EventArgs e)
     {
         Rect workArea = SystemParameters.WorkArea;
-        double windowWidth = ActualWidth > 0 ? ActualWidth : Width;
+        double windowWidth = GetWindowWidth();
         double nextLeft = Left + (_movingRight ? 2 : -2);
 
         if (nextLeft <= workArea.Left)
@@ -154,6 +167,16 @@ public partial class MainWindow : Window
         }
 
         Left = nextLeft;
+    }
+
+    private double GetWindowWidth()
+    {
+        return ActualWidth > 0 ? ActualWidth : Width;
+    }
+
+    private double GetWindowHeight()
+    {
+        return ActualHeight > 0 ? ActualHeight : Height;
     }
 
     private void SetMovementDirection(bool movingRight)
@@ -181,12 +204,21 @@ public partial class MainWindow : Window
             return;
         }
 
+        StopBehaviorTimers();
+
         try
         {
             DragMove();
         }
         catch (InvalidOperationException)
         {
+        }
+        finally
+        {
+            if (!_alertActive)
+            {
+                StartBehaviorMode();
+            }
         }
 
         e.Handled = true;
