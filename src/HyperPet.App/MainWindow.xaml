@@ -1,12 +1,80 @@
-﻿<Window x:Class="HyperPet.App.MainWindow"
+<Window x:Class="HyperPet.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:HyperPet.App"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="HyperPet"
+        Width="320"
+        Height="220"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStyle="None">
+    <Grid MouseLeftButtonDown="OnMouseLeftButtonDown">
+        <Grid.ContextMenu>
+            <ContextMenu>
+                <MenuItem x:Name="PauseAlertsMenuItem"
+                          Header="Pause alerts"
+                          IsCheckable="True"
+                          Click="OnPauseAlertsClick" />
+                <MenuItem Header="Settings"
+                          Click="OnSettingsClick" />
+                <Separator />
+                <MenuItem Header="Quit"
+                          Click="OnQuitClick" />
+            </ContextMenu>
+        </Grid.ContextMenu>
 
+        <Border x:Name="Bubble"
+                Width="250"
+                Padding="14"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Background="#F7FFFFFF"
+                BorderBrush="#22000000"
+                BorderThickness="1"
+                CornerRadius="8"
+                Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock x:Name="BubbleAppName"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Foreground="#555555"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock x:Name="BubbleTitle"
+                           Margin="0,4,0,0"
+                           FontSize="16"
+                           FontWeight="Bold"
+                           Foreground="#111111"
+                           TextWrapping="Wrap" />
+                <TextBlock x:Name="BubbleBody"
+                           Margin="0,6,0,0"
+                           FontSize="13"
+                           Foreground="#333333"
+                           MaxHeight="72"
+                           TextTrimming="CharacterEllipsis"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <Border Width="96"
+                Height="96"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Background="#FFFFD166"
+                BorderBrush="#FF1D3557"
+                BorderThickness="3"
+                CornerRadius="48">
+            <TextBlock x:Name="PetFace"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontSize="32"
+                       FontWeight="Bold"
+                       Foreground="#FF1D3557"
+                       Text="^_^" />
+        </Border>
     </Grid>
 </Window>
