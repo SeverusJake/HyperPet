@@ -1,3 +1,4 @@
+using HyperPet.Core.Pets;
 using HyperPet.Core.Settings;
 
 namespace HyperPet.Core.Tests.Settings;
@@ -14,7 +15,8 @@ public sealed class SettingsStoreTests : IDisposable
 
         var settings = await store.LoadAsync();
 
-        Assert.Equal("Default", settings.SelectedPet);
+        Assert.Equal("miku-kimono", settings.SelectedPet);
+        Assert.Equal(PetBehaviorMode.Calm, settings.PetBehaviorMode);
         Assert.Equal(8, settings.AlertDurationSeconds);
         Assert.False(settings.AlertsPaused);
         Assert.True(settings.ShowFullNotificationContent);
@@ -31,6 +33,7 @@ public sealed class SettingsStoreTests : IDisposable
         {
             SelectedPet = "PixelCat",
             AlertDurationSeconds = 12,
+            PetBehaviorMode = PetBehaviorMode.Desktop,
             AlertsPaused = true,
             ShowFullNotificationContent = false,
             StartWithWindows = true,
@@ -43,6 +46,7 @@ public sealed class SettingsStoreTests : IDisposable
 
         Assert.Equal(expected.SelectedPet, actual.SelectedPet);
         Assert.Equal(expected.AlertDurationSeconds, actual.AlertDurationSeconds);
+        Assert.Equal(expected.PetBehaviorMode, actual.PetBehaviorMode);
         Assert.Equal(expected.AlertsPaused, actual.AlertsPaused);
         Assert.Equal(expected.ShowFullNotificationContent, actual.ShowFullNotificationContent);
         Assert.Equal(expected.StartWithWindows, actual.StartWithWindows);
@@ -61,11 +65,13 @@ public sealed class SettingsStoreTests : IDisposable
 
         var settings = await store.LoadAsync();
 
-        Assert.Equal("Default", settings.SelectedPet);
+        Assert.Equal("miku-kimono", settings.SelectedPet);
+        Assert.Equal(PetBehaviorMode.Calm, settings.PetBehaviorMode);
         Assert.Equal(8, settings.AlertDurationSeconds);
         Assert.True(File.Exists(settingsPath));
         var savedSettings = await store.LoadAsync();
-        Assert.Equal("Default", savedSettings.SelectedPet);
+        Assert.Equal("miku-kimono", savedSettings.SelectedPet);
+        Assert.Equal(PetBehaviorMode.Calm, savedSettings.PetBehaviorMode);
         Assert.Equal(8, savedSettings.AlertDurationSeconds);
         Assert.True(Directory.GetFiles(directory, "settings.json.corrupt-*").Length == 1);
     }
@@ -88,8 +94,8 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Theory]
-    [InlineData("", 2, "Default", 3)]
-    [InlineData("  ", 31, "Default", 30)]
+    [InlineData("", 2, "miku-kimono", 3)]
+    [InlineData("  ", 31, "miku-kimono", 30)]
     public async Task SaveAsync_WhenSettingsNeedSanitizing_SavesSanitizedCopyWithoutMutatingOriginal(
         string selectedPet,
         int alertDurationSeconds,

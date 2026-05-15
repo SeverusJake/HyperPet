@@ -1,4 +1,5 @@
 using System.Text.Json;
+using HyperPet.Core.Pets;
 
 namespace HyperPet.Core.Settings;
 
@@ -64,8 +65,11 @@ public sealed class SettingsStore
         return new HyperPetSettings
         {
             SelectedPet = string.IsNullOrWhiteSpace(settings.SelectedPet)
-                ? "Default"
+                ? "miku-kimono"
                 : settings.SelectedPet,
+            PetBehaviorMode = Enum.IsDefined(settings.PetBehaviorMode)
+                ? settings.PetBehaviorMode
+                : PetBehaviorMode.Calm,
             AlertDurationSeconds = Math.Clamp(settings.AlertDurationSeconds, 3, 30),
             AlertsPaused = settings.AlertsPaused,
             ShowFullNotificationContent = settings.ShowFullNotificationContent,
