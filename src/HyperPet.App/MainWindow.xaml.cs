@@ -12,11 +12,13 @@ public partial class MainWindow : Window
     private readonly MainWindowViewModel _viewModel;
     private readonly HyperPetSettings _settings;
     private readonly Action<bool> _applyStartupSetting;
+    private readonly Action _saveSettings;
 
-    public MainWindow(HyperPetSettings settings, Action<bool> applyStartupSetting)
+    public MainWindow(HyperPetSettings settings, Action<bool> applyStartupSetting, Action saveSettings)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
+        _saveSettings = saveSettings;
 
         InitializeComponent();
 
@@ -86,6 +88,8 @@ public partial class MainWindow : Window
         {
             DismissAlert();
         }
+
+        _saveSettings();
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)
@@ -95,7 +99,10 @@ public partial class MainWindow : Window
             Owner = this
         };
 
-        settingsWindow.ShowDialog();
+        if (settingsWindow.ShowDialog() == true)
+        {
+            _saveSettings();
+        }
     }
 
     private void OnQuitClick(object sender, RoutedEventArgs e)

@@ -22,22 +22,31 @@ public partial class SettingsWindow : Window
 
     private void OnCloseClick(object sender, RoutedEventArgs e)
     {
+        bool previousStartWithWindows = _settings.StartWithWindows;
+        bool requestedStartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
+
         _settings.ShowFullNotificationContent = ShowFullContentCheckBox.IsChecked == true;
-        _settings.StartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
         _settings.AlertDurationSeconds = (int)Math.Round(AlertDurationSlider.Value);
 
-        try
+        if (requestedStartWithWindows != previousStartWithWindows)
         {
-            _applyStartupSetting(_settings.StartWithWindows);
-        }
-        catch (Exception exception)
-        {
-            MessageBox.Show(
-                this,
-                $"HyperPet could not update the Windows startup setting. Your other settings were saved.\n\n{exception.Message}",
-                "HyperPet Settings",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            try
+            {
+                _applyStartupSetting(requestedStartWithWindows);
+                _settings.StartWithWindows = requestedStartWithWindows;
+            }
+            catch (Exception exception)
+            {
+                _settings.StartWithWindows = previousStartWithWindows;
+                StartWithWindowsCheckBox.IsChecked = previousStartWithWindows;
+
+                MessageBox.Show(
+                    this,
+                    $"HyperPet could not update the Windows startup setting. Startup was left unchanged, but your other settings were applied.\n\n{exception.Message}",
+                    "HyperPet Settings",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
         }
 
         DialogResult = true;

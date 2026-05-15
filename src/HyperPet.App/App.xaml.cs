@@ -45,7 +45,7 @@ public partial class App : Application
         var notificationDedupe = new NotificationDedupe();
         var notificationListener = new WindowsNotificationListener();
 
-        _mainWindow = new MainWindow(_settings, ApplyStartupSetting)
+        _mainWindow = new MainWindow(_settings, ApplyStartupSetting, SaveSettings)
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
@@ -178,5 +178,29 @@ public partial class App : Application
         }
 
         _startupService.SetEnabled(enabled, executablePath);
+    }
+
+    private void SaveSettings()
+    {
+        if (_settingsStore is null || _settings is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _settingsStore.Save(_settings);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"Could not save HyperPet settings: {exception}");
+
+            MessageBox.Show(
+                _mainWindow,
+                "HyperPet could not save your settings right now. They may need to be set again next time.",
+                "HyperPet Settings",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 }
