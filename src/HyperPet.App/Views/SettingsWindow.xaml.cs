@@ -1,5 +1,6 @@
 using System.Windows;
 using HyperPet.Core.Settings;
+using HyperPet.Core.Pets;
 
 namespace HyperPet.App.Views;
 
@@ -17,6 +18,7 @@ public partial class SettingsWindow : Window
 
         ShowFullContentCheckBox.IsChecked = settings.ShowFullNotificationContent;
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
+        PetBehaviorComboBox.SelectedIndex = settings.PetBehaviorMode == PetBehaviorMode.Desktop ? 1 : 0;
         AlertDurationSlider.Value = settings.AlertDurationSeconds;
     }
 
@@ -26,6 +28,9 @@ public partial class SettingsWindow : Window
         bool requestedStartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
 
         _settings.ShowFullNotificationContent = ShowFullContentCheckBox.IsChecked == true;
+        _settings.PetBehaviorMode = PetBehaviorComboBox.SelectedIndex == 1
+            ? PetBehaviorMode.Desktop
+            : PetBehaviorMode.Calm;
         _settings.AlertDurationSeconds = (int)Math.Round(AlertDurationSlider.Value);
 
         if (requestedStartWithWindows != previousStartWithWindows)

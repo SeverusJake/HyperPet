@@ -247,6 +247,7 @@ public partial class MainWindow : Window
         if (settingsWindow.ShowDialog() == true)
         {
             _saveSettings();
+            StartBehaviorMode();
         }
     }
 

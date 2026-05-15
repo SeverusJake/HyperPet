@@ -3,11 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Settings"
         Width="360"
-        Height="260"
+        Height="330"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -32,6 +33,17 @@
 
         <StackPanel Grid.Row="3"
                     Margin="0,18,0,0">
+            <TextBlock Text="Pet behavior" />
+            <ComboBox x:Name="PetBehaviorComboBox"
+                      Margin="0,8,0,0"
+                      SelectedIndex="0">
+                <ComboBoxItem Content="Calm" />
+                <ComboBoxItem Content="Desktop" />
+            </ComboBox>
+        </StackPanel>
+
+        <StackPanel Grid.Row="4"
+                    Margin="0,18,0,0">
             <TextBlock Text="Alert duration" />
             <Slider x:Name="AlertDurationSlider"
                     Margin="0,8,0,0"
@@ -43,7 +55,7 @@
                     TickPlacement="BottomRight" />
         </StackPanel>
 
-        <Button Grid.Row="4"
+        <Button Grid.Row="5"
                 Width="86"
                 HorizontalAlignment="Right"
                 Content="Close"
