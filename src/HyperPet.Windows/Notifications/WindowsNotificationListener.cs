@@ -46,8 +46,12 @@ public sealed class WindowsNotificationListener : INotificationListener
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            string appUserModelId = notification.AppInfo.AppUserModelId;
+            string appUserModelId = notification.AppInfo.AppUserModelId ?? string.Empty;
             string appName = notification.AppInfo.DisplayInfo.DisplayName;
+            if (string.IsNullOrWhiteSpace(appName))
+            {
+                appName = string.IsNullOrWhiteSpace(appUserModelId) ? "Unknown app" : appUserModelId;
+            }
             IReadOnlyList<string> textElements = ExtractToastGenericText(notification.Notification);
 
             string title = textElements.Count > 0 ? textElements[0] : "Notification";
@@ -66,7 +70,7 @@ public sealed class WindowsNotificationListener : INotificationListener
                 title,
                 body,
                 notification.CreationTime,
-                canActivate: true));
+                canActivate: false));
         }
 
         return hyperNotifications;
@@ -74,6 +78,8 @@ public sealed class WindowsNotificationListener : INotificationListener
 
     public Task<bool> TryActivateAsync(HyperNotification notification, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         return Task.FromResult(false);
     }
 
