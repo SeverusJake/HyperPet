@@ -1,8 +1,12 @@
-using System.Diagnostics;
 using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 using HyperPet.App.Pets;
 using HyperPet.App.Views;
+using HyperPet.Core.Diagnostics;
 using HyperPet.Core.Notifications;
 using HyperPet.Core.Pet;
 using HyperPet.Core.Settings;
@@ -18,7 +22,10 @@ public partial class App : Application
     private SettingsStore? _settingsStore;
     private HyperPetSettings? _settings;
     private MainWindow? _mainWindow;
-    private Task? _monitorTask;
+    private DispatcherTimer? _monitorTimer;
+    private bool _monitorIterationRunning;
+    private INotificationListener? _notificationListener;
+    private HyperPetLogger? _logger;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -27,6 +34,10 @@ public partial class App : Application
         string settingsDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "HyperPet");
+
+        _logger = new HyperPetLogger(settingsDirectory);
+        WireUnhandledExceptionHandlers(_logger);
+        LogSessionHeader(_logger);
 
         Exception? settingsLoadException = null;
 
@@ -37,17 +48,19 @@ public partial class App : Application
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"Could not load HyperPet settings: {exception}");
+            _logger.Error("Could not load HyperPet settings", exception);
             settingsLoadException = exception;
             _settings = HyperPetSettings.CreateDefault();
         }
 
         var petController = new PetController();
         var notificationDedupe = new NotificationDedupe();
-        var notificationListener = new WindowsNotificationListener();
-        SpritePet? spritePet = await TryLoadSpritePetAsync();
+        var notificationListener = new WindowsNotificationListener(_logger);
+        _notificationListener = notificationListener;
+        var appLauncher = new AppLauncher();
+        SpritePet? spritePet = await TryLoadSpritePetAsync(_logger);
 
-        _mainWindow = new MainWindow(_settings, ApplyStartupSetting, SaveSettings, spritePet)
+        _mainWindow = new MainWindow(_settings, ApplyStartupSetting, SaveSettings, spritePet, appLauncher)
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
@@ -94,6 +107,9 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _logger?.Info("Session exit requested");
+        _monitorTimer?.Stop();
+        _notificationListener?.StopListening();
         _shutdownCts.Cancel();
 
         if (_settingsStore is not null && _settings is not null && _mainWindow is not null)
@@ -107,7 +123,7 @@ public partial class App : Application
             }
             catch (Exception exception)
             {
-                Debug.WriteLine($"Could not save HyperPet settings: {exception}");
+                _logger?.Error("Could not save HyperPet settings on exit", exception);
             }
         }
 
@@ -116,57 +132,124 @@ public partial class App : Application
         base.OnExit(e);
     }
 
-    private async Task MonitorNotificationsAsync(
+    private void WireUnhandledExceptionHandlers(HyperPetLogger logger)
+    {
+        DispatcherUnhandledException += (_, args) =>
+        {
+            logger.Fatal("DispatcherUnhandledException (UI thread)", args.Exception);
+            args.Handled = true;
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            logger.Fatal("UnobservedTaskException (background)", args.Exception);
+            args.SetObserved();
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            var exception = args.ExceptionObject as Exception;
+            logger.Fatal(
+                $"AppDomain.UnhandledException (terminating={args.IsTerminating})",
+                exception);
+        };
+
+        AppDomain.CurrentDomain.FirstChanceException += (_, args) =>
+        {
+            // Logs every thrown exception, even if caught downstream. Useful
+            // when process dies without any hook firing — at least we see the
+            // last exception before silence.
+            logger.Warn(
+                $"FirstChanceException: {args.Exception.GetType().FullName}: {args.Exception.Message}");
+        };
+
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            logger.Info("ProcessExit");
+        };
+    }
+
+    private static void LogSessionHeader(HyperPetLogger logger)
+    {
+        try
+        {
+            var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
+            var os = RuntimeInformation.OSDescription;
+            var fx = RuntimeInformation.FrameworkDescription;
+            logger.Info($"=== HyperPet session start === version={version} os={os} framework={fx}");
+        }
+        catch (Exception exception)
+        {
+            logger.Warn("Could not collect session header info", exception);
+        }
+    }
+
+    private async Task MonitorNotificationsIterationAsync(
         INotificationListener notificationListener,
         NotificationDedupe notificationDedupe,
         PetController petController,
-        HyperPetSettings settings,
-        CancellationToken cancellationToken)
+        HyperPetSettings settings)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        if (_monitorIterationRunning || _shutdownCts.IsCancellationRequested)
         {
-            try
+            return;
+        }
+
+        _monitorIterationRunning = true;
+        try
+        {
+            _logger?.Info("monitor heartbeat");
+
+            IReadOnlyList<HyperNotification> notifications =
+                await notificationListener.GetActiveNotificationsAsync(_shutdownCts.Token);
+
+            foreach (HyperNotification notification in notifications)
             {
-                IReadOnlyList<HyperNotification> notifications =
-                    await notificationListener.GetActiveNotificationsAsync(cancellationToken);
-
-                foreach (HyperNotification notification in notifications)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (!notificationDedupe.ShouldAlert(notification))
-                    {
-                        continue;
-                    }
-
-                    PetAlert? alert = petController.HandleNotification(notification, settings);
-                    if (alert is null)
-                    {
-                        continue;
-                    }
-
-                    await Dispatcher.InvokeAsync(() => _mainWindow?.ShowAlert(alert));
-                }
-
-                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception exception)
-            {
-                Debug.WriteLine($"Notification monitor failed: {exception}");
-
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                if (_shutdownCts.IsCancellationRequested)
                 {
                     break;
                 }
+
+                DispatchIfNew(notification, notificationDedupe, petController, settings);
             }
+        }
+        catch (OperationCanceledException) when (_shutdownCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _logger?.Error("Notification monitor iteration failed", exception);
+        }
+        finally
+        {
+            _monitorIterationRunning = false;
+        }
+    }
+
+    private void DispatchIfNew(
+        HyperNotification notification,
+        NotificationDedupe notificationDedupe,
+        PetController petController,
+        HyperPetSettings settings)
+    {
+        if (!notificationDedupe.ShouldAlert(notification))
+        {
+            return;
+        }
+
+        PetAlert? alert = petController.HandleNotification(notification, settings);
+        if (alert is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _mainWindow?.ShowAlert(alert);
+        }
+        catch (Exception uiException)
+        {
+            _logger?.Error("ShowAlert threw on UI thread", uiException);
         }
     }
 
@@ -183,7 +266,7 @@ public partial class App : Application
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"Could not request notification access: {exception}");
+            _logger?.Error("Could not request notification access", exception);
             return NotificationAccessStatus.Unspecified;
         }
     }
@@ -194,21 +277,51 @@ public partial class App : Application
         PetController petController,
         HyperPetSettings settings)
     {
-        if (_monitorTask is not null || _shutdownCts.IsCancellationRequested)
+        if (_monitorTimer is not null || _shutdownCts.IsCancellationRequested)
         {
             return;
         }
 
-        _monitorTask = Task.Run(
-            () => MonitorNotificationsAsync(
+        // Event-based: NotificationChanged fires when a notification is added.
+        // Marshal to the UI/STA thread before processing.
+        notificationListener.NotificationAdded += (_, notification) =>
+        {
+            try
+            {
+                Dispatcher.InvokeAsync(() =>
+                    DispatchIfNew(notification, notificationDedupe, petController, settings));
+            }
+            catch (Exception exception)
+            {
+                _logger?.Error("NotificationAdded dispatch failed", exception);
+            }
+        };
+        notificationListener.StartListening();
+
+        // Slow poll as fallback: catches notifications that arrived before
+        // subscription and resyncs if NotificationChanged event is unsupported
+        // (e.g., unpackaged desktop without background task registration).
+        _monitorTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(30)
+        };
+        _monitorTimer.Tick += async (_, _) =>
+            await MonitorNotificationsIterationAsync(
                 notificationListener,
                 notificationDedupe,
                 petController,
-                settings,
-                _shutdownCts.Token));
+                settings);
+        _monitorTimer.Start();
+
+        // Kick off one immediate poll so we don't wait 30s for first sync.
+        _ = MonitorNotificationsIterationAsync(
+            notificationListener,
+            notificationDedupe,
+            petController,
+            settings);
     }
 
-    private static async Task<SpritePet?> TryLoadSpritePetAsync()
+    private static async Task<SpritePet?> TryLoadSpritePetAsync(HyperPetLogger logger)
     {
         string petDirectory = Path.Combine(
             AppContext.BaseDirectory,
@@ -222,7 +335,7 @@ public partial class App : Application
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"Could not load sprite pet from '{petDirectory}': {exception}");
+            logger.Error($"Could not load sprite pet from '{petDirectory}'", exception);
             return null;
         }
     }
@@ -251,7 +364,7 @@ public partial class App : Application
         }
         catch (Exception exception)
         {
-            Debug.WriteLine($"Could not save HyperPet settings: {exception}");
+            _logger?.Error("Could not save HyperPet settings", exception);
 
             MessageBox.Show(
                 _mainWindow,
