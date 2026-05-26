@@ -31,3 +31,6 @@ packages/
 # OS files
 Thumbs.db
 Desktop.ini
+
+# Claude Code harness state
+.claude/

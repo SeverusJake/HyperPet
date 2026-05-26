@@ -5,6 +5,18 @@ namespace HyperPet.Core.Pet;
 
 public sealed class PetController
 {
+    private readonly MessagingAppFilter? _messagingAppFilter;
+
+    public PetController()
+        : this(messagingAppFilter: null)
+    {
+    }
+
+    public PetController(MessagingAppFilter? messagingAppFilter)
+    {
+        _messagingAppFilter = messagingAppFilter;
+    }
+
     public PetState State { get; private set; } = PetState.Idle;
 
     public PetAlert? CurrentAlert { get; private set; }
@@ -16,6 +28,15 @@ public sealed class PetController
             return null;
         }
 
+        if (settings.OnlyMessagingApps)
+        {
+            var filter = _messagingAppFilter ?? new MessagingAppFilter(settings.MessagingApps);
+            if (!filter.IsMessagingApp(notification))
+            {
+                return null;
+            }
+        }
+
         var title = settings.ShowFullNotificationContent ? notification.Title : "Notification";
         var body = settings.ShowFullNotificationContent ? notification.Body : string.Empty;
 
@@ -24,7 +45,8 @@ public sealed class PetController
             title,
             body,
             notification.Timestamp,
-            notification.CanActivate);
+            notification.CanActivate,
+            notification.AppUserModelId);
 
         CurrentAlert = alert;
         State = PetState.Alerting;

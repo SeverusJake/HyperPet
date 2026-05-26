@@ -4,17 +4,17 @@
   "description": "Miku-inspired kimono chibi with lively hand, foot, blink, face, and hair animations.",
   "spritesheetPath": "spritesheet.webp",
   "kind": "person",
-  "frameWidth": 128,
+  "frameWidth": 192,
   "frameHeight": 208,
   "states": {
-    "idle": { "row": 0, "frames": 12, "fps": 8, "loop": true },
-    "runRight": { "row": 1, "frames": 12, "fps": 12, "loop": true },
-    "runLeft": { "row": 2, "frames": 12, "fps": 12, "loop": true },
-    "waving": { "row": 3, "frames": 12, "fps": 8, "loop": false },
-    "jumping": { "row": 4, "frames": 12, "fps": 10, "loop": false },
-    "failed": { "row": 5, "frames": 12, "fps": 8, "loop": false },
-    "waiting": { "row": 6, "frames": 12, "fps": 6, "loop": true },
-    "running": { "row": 7, "frames": 12, "fps": 12, "loop": true },
-    "review": { "row": 8, "frames": 12, "fps": 8, "loop": false }
+    "idle": { "row": 0, "frames": 8, "fps": 1, "loop": true },
+    "runRight": { "row": 1, "frames": 8, "fps": 12, "loop": true },
+    "runLeft": { "row": 2, "frames": 8, "fps": 12, "loop": true },
+    "waving": { "row": 3, "frames": 8, "fps": 8, "loop": false },
+    "jumping": { "row": 4, "frames": 8, "fps": 10, "loop": false },
+    "failed": { "row": 5, "frames": 8, "fps": 8, "loop": false },
+    "waiting": { "row": 6, "frames": 8, "fps": 4, "loop": true },
+    "running": { "row": 7, "frames": 8, "fps": 12, "loop": true },
+    "review": { "row": 8, "frames": 8, "fps": 8, "loop": false }
   }
 }

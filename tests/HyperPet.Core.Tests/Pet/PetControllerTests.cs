@@ -21,6 +21,7 @@ public sealed class PetControllerTests
         Assert.Equal("Friend", alert.Title);
         Assert.Equal("hello from discord", alert.Body);
         Assert.True(alert.CanActivate);
+        Assert.Equal("Discord.Discord", alert.AppUserModelId);
     }
 
     [Fact]
@@ -52,6 +53,61 @@ public sealed class PetControllerTests
     }
 
     [Fact]
+    public void HandleNotification_WhenOnlyMessagingApps_FiltersOutNonMessaging()
+    {
+        var controller = new PetController();
+        var settings = HyperPetSettings.CreateDefault();
+        settings.OnlyMessagingApps = true;
+
+        var notification = new HyperNotification(
+            "outlook-1",
+            "Outlook",
+            "Boss",
+            "ping",
+            DateTimeOffset.UtcNow,
+            canActivate: false,
+            appUserModelId: "Microsoft.Office.OUTLOOK");
+
+        var alert = controller.HandleNotification(notification, settings);
+
+        Assert.Null(alert);
+        Assert.Equal(PetState.Idle, controller.State);
+    }
+
+    [Fact]
+    public void HandleNotification_WhenOnlyMessagingApps_AllowsMatchingApp()
+    {
+        var controller = new PetController();
+        var settings = HyperPetSettings.CreateDefault();
+        settings.OnlyMessagingApps = true;
+
+        var alert = controller.HandleNotification(CreateNotification(), settings);
+
+        Assert.NotNull(alert);
+    }
+
+    [Fact]
+    public void HandleNotification_WhenOnlyMessagingAppsDisabled_AllowsAnyApp()
+    {
+        var controller = new PetController();
+        var settings = HyperPetSettings.CreateDefault();
+        settings.OnlyMessagingApps = false;
+
+        var notification = new HyperNotification(
+            "outlook-1",
+            "Outlook",
+            "Boss",
+            "ping",
+            DateTimeOffset.UtcNow,
+            canActivate: false,
+            appUserModelId: "Microsoft.Office.OUTLOOK");
+
+        var alert = controller.HandleNotification(notification, settings);
+
+        Assert.NotNull(alert);
+    }
+
+    [Fact]
     public void DismissAlert_ReturnsToIdle()
     {
         var controller = new PetController();
@@ -71,6 +127,8 @@ public sealed class PetControllerTests
             "Friend",
             "hello from discord",
             DateTimeOffset.Parse("2026-05-14T10:00:00+07:00"),
-            canActivate: true);
+            canActivate: true,
+            appUserModelId: "Discord.Discord");
     }
 }
+

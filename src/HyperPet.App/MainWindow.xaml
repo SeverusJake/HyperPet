@@ -12,7 +12,9 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Topmost="True"
-        WindowStyle="None">
+        WindowStyle="None"
+        Focusable="True"
+        KeyDown="OnWindowKeyDown">
     <Grid MouseLeftButtonDown="OnMouseLeftButtonDown">
         <Grid.ContextMenu>
             <ContextMenu>
@@ -37,6 +39,8 @@
                 BorderBrush="#22000000"
                 BorderThickness="1"
                 CornerRadius="8"
+                Cursor="Hand"
+                MouseLeftButtonDown="OnBubbleMouseLeftButtonDown"
                 Visibility="Collapsed">
             <StackPanel>
                 <TextBlock x:Name="BubbleAppName"
@@ -61,7 +65,7 @@
         </Border>
 
         <Image x:Name="PetImage"
-               Width="128"
+               Width="192"
                Height="208"
                HorizontalAlignment="Right"
                VerticalAlignment="Bottom"

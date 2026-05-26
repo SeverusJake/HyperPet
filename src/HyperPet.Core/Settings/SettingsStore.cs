@@ -1,4 +1,5 @@
 using System.Text.Json;
+using HyperPet.Core.Notifications;
 using HyperPet.Core.Pets;
 
 namespace HyperPet.Core.Settings;
@@ -76,7 +77,55 @@ public sealed class SettingsStore
             ShowFullNotificationContent = settings.ShowFullNotificationContent,
             StartWithWindows = settings.StartWithWindows,
             PetLeft = settings.PetLeft,
-            PetTop = settings.PetTop
+            PetTop = settings.PetTop,
+            OnlyMessagingApps = settings.OnlyMessagingApps,
+            OpenAppOnBubbleClick = settings.OpenAppOnBubbleClick,
+            EnableFrameControls = settings.EnableFrameControls,
+            MessagingApps = SanitizeMessagingApps(settings.MessagingApps)
         };
+    }
+
+    private static List<MessagingAppRule> SanitizeMessagingApps(List<MessagingAppRule>? rules)
+    {
+        if (rules is null || rules.Count == 0)
+        {
+            return MessagingAppRule.CreateDefaults().ToList();
+        }
+
+        var sanitized = new List<MessagingAppRule>(rules.Count);
+        foreach (var rule in rules)
+        {
+            if (rule is null)
+            {
+                continue;
+            }
+
+            var displayName = string.IsNullOrWhiteSpace(rule.DisplayName)
+                ? string.Empty
+                : rule.DisplayName.Trim();
+            var patterns = (rule.MatchPatterns ?? new List<string>())
+                .Where(pattern => !string.IsNullOrWhiteSpace(pattern))
+                .Select(pattern => pattern.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (string.IsNullOrEmpty(displayName) && patterns.Count == 0)
+            {
+                continue;
+            }
+
+            sanitized.Add(new MessagingAppRule
+            {
+                DisplayName = string.IsNullOrEmpty(displayName)
+                    ? patterns[0]
+                    : displayName,
+                MatchPatterns = patterns,
+                Enabled = rule.Enabled
+            });
+        }
+
+        return sanitized.Count == 0
+            ? MessagingAppRule.CreateDefaults().ToList()
+            : sanitized;
     }
 }

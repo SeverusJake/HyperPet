@@ -7,6 +7,7 @@ using HyperPet.App.ViewModels;
 using HyperPet.Core.Pet;
 using HyperPet.Core.Pets;
 using HyperPet.App.Views;
+using HyperPet.Windows.Startup;
 
 namespace HyperPet.App;
 
@@ -16,6 +17,7 @@ public partial class MainWindow : Window
     private readonly HyperPetSettings _settings;
     private readonly Action<bool> _applyStartupSetting;
     private readonly Action _saveSettings;
+    private readonly IAppLauncher? _appLauncher;
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
     private readonly DispatcherTimer _movementTimer = new();
@@ -28,11 +30,13 @@ public partial class MainWindow : Window
         HyperPetSettings settings,
         Action<bool> applyStartupSetting,
         Action saveSettings,
-        SpritePet? spritePet)
+        SpritePet? spritePet,
+        IAppLauncher? appLauncher = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
         _saveSettings = saveSettings;
+        _appLauncher = appLauncher;
 
         InitializeComponent();
 
@@ -224,6 +228,33 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void OnBubbleMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            DismissAlert();
+            e.Handled = true;
+            return;
+        }
+
+        if (!_settings.OpenAppOnBubbleClick || _appLauncher is null)
+        {
+            return;
+        }
+
+        var alert = _viewModel.CurrentAlert;
+        if (alert is null || string.IsNullOrWhiteSpace(alert.AppUserModelId))
+        {
+            return;
+        }
+
+        if (_appLauncher.TryLaunch(alert.AppUserModelId))
+        {
+            DismissAlert();
+            e.Handled = true;
+        }
+    }
+
     private void OnPauseAlertsClick(object sender, RoutedEventArgs e)
     {
         _settings.AlertsPaused = PauseAlertsMenuItem.IsChecked;
@@ -254,5 +285,29 @@ public partial class MainWindow : Window
     private void OnQuitClick(object sender, RoutedEventArgs e)
     {
         Application.Current.Shutdown();
+    }
+
+    private void OnWindowKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_petAnimator is null || !_settings.EnableFrameControls)
+        {
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.F3:
+                _petAnimator.TogglePause();
+                e.Handled = true;
+                break;
+            case Key.F2:
+                _petAnimator.StepNext();
+                e.Handled = true;
+                break;
+            case Key.F1:
+                _petAnimator.StepPrevious();
+                e.Handled = true;
+                break;
+        }
     }
 }

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "HyperPet.App": {
+      "commandName": "Project",
+      "debugEngines": "native"
+    }
+  }
+}

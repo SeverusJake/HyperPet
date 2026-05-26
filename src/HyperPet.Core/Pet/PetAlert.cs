@@ -5,4 +5,5 @@ public sealed record PetAlert(
     string Title,
     string Body,
     DateTimeOffset Timestamp,
-    bool CanActivate);
+    bool CanActivate,
+    string AppUserModelId = "");

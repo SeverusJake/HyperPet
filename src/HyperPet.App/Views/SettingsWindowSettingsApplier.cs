@@ -1,3 +1,4 @@
+using HyperPet.Core.Notifications;
 using HyperPet.Core.Pets;
 using HyperPet.Core.Settings;
 
@@ -11,6 +12,10 @@ public static class SettingsWindowSettingsApplier
         PetBehaviorMode petBehaviorMode,
         int alertDurationSeconds,
         bool startWithWindows,
+        bool onlyMessagingApps,
+        bool openAppOnBubbleClick,
+        bool enableFrameControls,
+        IReadOnlyList<MessagingAppRule> messagingApps,
         Action<bool> applyStartupSetting,
         Action<string> showStartupWarning)
     {
@@ -35,6 +40,10 @@ public static class SettingsWindowSettingsApplier
         settings.PetBehaviorMode = petBehaviorMode;
         settings.AlertDurationSeconds = alertDurationSeconds;
         settings.StartWithWindows = startWithWindows;
+        settings.OnlyMessagingApps = onlyMessagingApps;
+        settings.OpenAppOnBubbleClick = openAppOnBubbleClick;
+        settings.EnableFrameControls = enableFrameControls;
+        settings.MessagingApps = messagingApps?.ToList() ?? MessagingAppRule.CreateDefaults().ToList();
 
         return true;
     }

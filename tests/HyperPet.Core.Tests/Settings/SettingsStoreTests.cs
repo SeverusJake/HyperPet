@@ -1,3 +1,4 @@
+using HyperPet.Core.Notifications;
 using HyperPet.Core.Pets;
 using HyperPet.Core.Settings;
 
@@ -21,6 +22,12 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.False(settings.AlertsPaused);
         Assert.True(settings.ShowFullNotificationContent);
         Assert.False(settings.StartWithWindows);
+        Assert.True(settings.OnlyMessagingApps);
+        Assert.False(settings.OpenAppOnBubbleClick);
+        Assert.Equal(3, settings.MessagingApps.Count);
+        Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Discord");
+        Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Zalo");
+        Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Messenger");
         Assert.True(File.Exists(Path.Combine(directory, "settings.json")));
     }
 
@@ -38,7 +45,14 @@ public sealed class SettingsStoreTests : IDisposable
             ShowFullNotificationContent = false,
             StartWithWindows = true,
             PetLeft = 140,
-            PetTop = 220
+            PetTop = 220,
+            OnlyMessagingApps = false,
+            OpenAppOnBubbleClick = true,
+            MessagingApps = new List<MessagingAppRule>
+            {
+                new("Telegram", new[] { "Telegram" }),
+                new("Slack", new[] { "Slack" }, enabled: false)
+            }
         };
 
         await store.SaveAsync(expected);
@@ -52,6 +66,11 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(expected.StartWithWindows, actual.StartWithWindows);
         Assert.Equal(expected.PetLeft, actual.PetLeft);
         Assert.Equal(expected.PetTop, actual.PetTop);
+        Assert.False(actual.OnlyMessagingApps);
+        Assert.True(actual.OpenAppOnBubbleClick);
+        Assert.Equal(2, actual.MessagingApps.Count);
+        Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Telegram" && app.Enabled);
+        Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Slack" && !app.Enabled);
     }
 
     [Fact]
