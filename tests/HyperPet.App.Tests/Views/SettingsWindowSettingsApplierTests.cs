@@ -29,7 +29,8 @@ public sealed class SettingsWindowSettingsApplierTests
             startWithWindows: true,
             onlyMessagingApps: false,
             openAppOnBubbleClick: true,
-            enableFrameControls: false,
+            reactToWindowsNotifications: true,
+            debugMode: false,
             messagingApps: new List<MessagingAppRule>
             {
                 new("Telegram", new[] { "Telegram" })
@@ -75,7 +76,8 @@ public sealed class SettingsWindowSettingsApplierTests
             startWithWindows: true,
             onlyMessagingApps: true,
             openAppOnBubbleClick: true,
-            enableFrameControls: true,
+            reactToWindowsNotifications: true,
+            debugMode: true,
             messagingApps: newApps,
             applyStartupSetting: value => appliedStartup = value,
             showStartupWarning: _ => throw new InvalidOperationException("warning should not show"));
@@ -88,7 +90,8 @@ public sealed class SettingsWindowSettingsApplierTests
         Assert.Equal(20, settings.AlertDurationSeconds);
         Assert.True(settings.OnlyMessagingApps);
         Assert.True(settings.OpenAppOnBubbleClick);
-        Assert.True(settings.EnableFrameControls);
+        Assert.True(settings.ReactToWindowsNotifications);
+        Assert.True(settings.DebugMode);
         Assert.Equal(2, settings.MessagingApps.Count);
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Telegram");
     }

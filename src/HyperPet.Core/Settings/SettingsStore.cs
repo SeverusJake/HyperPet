@@ -80,7 +80,8 @@ public sealed class SettingsStore
             PetTop = settings.PetTop,
             OnlyMessagingApps = settings.OnlyMessagingApps,
             OpenAppOnBubbleClick = settings.OpenAppOnBubbleClick,
-            EnableFrameControls = settings.EnableFrameControls,
+            ReactToWindowsNotifications = settings.ReactToWindowsNotifications,
+            DebugMode = settings.DebugMode,
             MessagingApps = SanitizeMessagingApps(settings.MessagingApps)
         };
     }

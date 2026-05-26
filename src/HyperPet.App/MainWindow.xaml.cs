@@ -17,26 +17,38 @@ public partial class MainWindow : Window
     private readonly HyperPetSettings _settings;
     private readonly Action<bool> _applyStartupSetting;
     private readonly Action _saveSettings;
+    private readonly Action<TimeSpan>? _setPollInterval;
+    private readonly Action<TimeSpan>? _pollSoon;
     private readonly IAppLauncher? _appLauncher;
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
     private readonly DispatcherTimer _movementTimer = new();
+    private readonly DispatcherTimer _debugOverlayTimer = new();
     private readonly Random _random = new();
     private readonly PetAnimator? _petAnimator;
     private bool _movingRight = true;
     private bool _alertActive;
+    private TimeSpan _debugPollInterval = TimeSpan.FromSeconds(30);
+    private DateTime _debugNextPollUtc = DateTime.UtcNow;
+    private int _debugLastPollCount;
+    private int _debugTotalAlerts;
+    private string _debugStatus = "starting";
 
     public MainWindow(
         HyperPetSettings settings,
         Action<bool> applyStartupSetting,
         Action saveSettings,
         SpritePet? spritePet,
-        IAppLauncher? appLauncher = null)
+        IAppLauncher? appLauncher = null,
+        Action<TimeSpan>? setPollInterval = null,
+        Action<TimeSpan>? pollSoon = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
         _saveSettings = saveSettings;
         _appLauncher = appLauncher;
+        _setPollInterval = setPollInterval;
+        _pollSoon = pollSoon;
 
         InitializeComponent();
 
@@ -51,7 +63,13 @@ public partial class MainWindow : Window
         _alertTimer.Tick += (_, _) => DismissAlert();
         _calmTimer.Tick += OnCalmTimerTick;
         _movementTimer.Tick += OnMovementTimerTick;
-        Loaded += (_, _) => ClampToWorkArea();
+        _debugOverlayTimer.Interval = TimeSpan.FromSeconds(1);
+        _debugOverlayTimer.Tick += OnDebugOverlayTimerTick;
+        Loaded += (_, _) =>
+        {
+            ClampToWorkArea();
+            ApplyDebugOverlayVisibility();
+        };
 
         if (spritePet is null)
         {
@@ -72,6 +90,8 @@ public partial class MainWindow : Window
 
         _viewModel.CurrentAlert = alert;
         _alertActive = true;
+        _debugTotalAlerts++;
+        UpdateDebugOverlay();
         BubbleAppName.Text = alert.AppName;
         BubbleTitle.Text = alert.Title;
         BubbleBody.Text = alert.Body;
@@ -279,7 +299,72 @@ public partial class MainWindow : Window
         {
             _saveSettings();
             StartBehaviorMode();
+            ApplyDebugOverlayVisibility();
         }
+    }
+
+    /// <summary>
+    /// Sets the notification poll interval used to render the debug countdown.
+    /// </summary>
+    public void ConfigureDebugPolling(TimeSpan pollInterval)
+    {
+        _debugPollInterval = pollInterval;
+        _debugNextPollUtc = DateTime.UtcNow + pollInterval;
+    }
+
+    /// <summary>
+    /// Called by the notification monitor after each poll completes. Resets the
+    /// countdown to the next poll and records the count seen.
+    /// </summary>
+    public void ReportPollComplete(int notificationCount)
+    {
+        _debugLastPollCount = notificationCount;
+        _debugNextPollUtc = DateTime.UtcNow + _debugPollInterval;
+        _debugStatus = "polled";
+        UpdateDebugOverlay();
+    }
+
+    /// <summary>
+    /// Called by the notification monitor when a poll fails or is skipped.
+    /// </summary>
+    public void ReportPollStatus(string status)
+    {
+        _debugStatus = status;
+        UpdateDebugOverlay();
+    }
+
+    private void ApplyDebugOverlayVisibility()
+    {
+        if (_settings.DebugMode)
+        {
+            DebugOverlay.Visibility = Visibility.Visible;
+            _debugOverlayTimer.Start();
+            UpdateDebugOverlay();
+        }
+        else
+        {
+            _debugOverlayTimer.Stop();
+            DebugOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void OnDebugOverlayTimerTick(object? sender, EventArgs e)
+    {
+        UpdateDebugOverlay();
+    }
+
+    private void UpdateDebugOverlay()
+    {
+        if (!_settings.DebugMode)
+        {
+            return;
+        }
+
+        TimeSpan remaining = _debugNextPollUtc - DateTime.UtcNow;
+        int seconds = Math.Max(0, (int)Math.Ceiling(remaining.TotalSeconds));
+
+        DebugOverlayText.Text =
+            $"next poll: {seconds}s  |  last: {_debugLastPollCount}  |  alerts: {_debugTotalAlerts}  |  {_debugStatus}";
     }
 
     private void OnQuitClick(object sender, RoutedEventArgs e)
@@ -289,7 +374,40 @@ public partial class MainWindow : Window
 
     private void OnWindowKeyDown(object sender, KeyEventArgs e)
     {
-        if (_petAnimator is null || !_settings.EnableFrameControls)
+        if (!_settings.DebugMode)
+        {
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.D1:
+            case Key.NumPad1:
+                // Trigger next poll in 5s without changing the steady-state
+                // interval. Useful for testing without committing to a faster
+                // poll rate.
+                _pollSoon?.Invoke(TimeSpan.FromSeconds(5));
+                _debugNextPollUtc = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+                ReportPollStatus("poll-soon=5s");
+                e.Handled = true;
+                return;
+            case Key.D2:
+            case Key.NumPad2:
+                _setPollInterval?.Invoke(TimeSpan.FromSeconds(2));
+                ConfigureDebugPolling(TimeSpan.FromSeconds(2));
+                ReportPollStatus("interval=2s");
+                e.Handled = true;
+                return;
+            case Key.D3:
+            case Key.NumPad3:
+                _setPollInterval?.Invoke(TimeSpan.FromSeconds(30));
+                ConfigureDebugPolling(TimeSpan.FromSeconds(30));
+                ReportPollStatus("interval=30s");
+                e.Handled = true;
+                return;
+        }
+
+        if (_petAnimator is null)
         {
             return;
         }

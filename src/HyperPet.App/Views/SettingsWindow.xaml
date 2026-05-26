@@ -38,17 +38,21 @@
         <CheckBox x:Name="OnlyMessagingAppsCheckBox"
                   Grid.Row="3"
                   Margin="0,12,0,0"
-                  Content="Only react to messaging apps" />
+                  Content="React to messaging apps" />
 
         <CheckBox x:Name="OpenAppOnBubbleClickCheckBox"
                   Grid.Row="4"
                   Margin="0,8,0,0"
                   Content="Click bubble to open app" />
 
-        <CheckBox x:Name="EnableFrameControlsCheckBox"
-                  Grid.Row="5"
-                  Margin="0,8,0,0"
-                  Content="Enable frame controls (F1 prev, F2 next, F3 pause)" />
+        <StackPanel Grid.Row="5"
+                    Margin="0,8,0,0">
+            <CheckBox x:Name="ReactToWindowsNotificationsCheckBox"
+                      Content="React to Windows notifications" />
+            <CheckBox x:Name="DebugModeCheckBox"
+                      Margin="0,8,0,0"
+                      Content="Debug overlay (poll countdown + F1/F2/F3 frame controls + number-key shortcuts)" />
+        </StackPanel>
 
         <StackPanel Grid.Row="6"
                     Margin="0,18,0,0">

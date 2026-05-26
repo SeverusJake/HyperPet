@@ -27,10 +27,19 @@ public sealed class HyperPetSettings
     public bool OpenAppOnBubbleClick { get; set; }
 
     /// <summary>
-    /// When true, F1/F2/F3 keyboard shortcuts on the pet window step / pause
-    /// the sprite animation. Useful for debugging sprite frames; off by default.
+    /// Master toggle for the Windows notification listener. When false, the
+    /// app stops polling and stops dispatching pet alerts. Useful for going
+    /// "silent" without quitting the app.
     /// </summary>
-    public bool EnableFrameControls { get; set; }
+    public bool ReactToWindowsNotifications { get; set; } = true;
+
+    /// <summary>
+    /// When true, the pet window shows a small debug overlay with the next
+    /// notification poll countdown, last poll notification count, and total
+    /// alerts shown this session. Also enables F1/F2/F3 sprite frame controls
+    /// and number-key poll shortcuts on the pet window.
+    /// </summary>
+    public bool DebugMode { get; set; }
 
     public List<MessagingAppRule> MessagingApps { get; set; } = MessagingAppRule.CreateDefaults().ToList();
 

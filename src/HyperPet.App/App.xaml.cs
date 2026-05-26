@@ -25,6 +25,7 @@ public partial class App : Application
     private DispatcherTimer? _monitorTimer;
     private bool _monitorIterationRunning;
     private INotificationListener? _notificationListener;
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
     private HyperPetLogger? _logger;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -60,7 +61,14 @@ public partial class App : Application
         var appLauncher = new AppLauncher();
         SpritePet? spritePet = await TryLoadSpritePetAsync(_logger);
 
-        _mainWindow = new MainWindow(_settings, ApplyStartupSetting, SaveSettings, spritePet, appLauncher)
+        _mainWindow = new MainWindow(
+            _settings,
+            ApplyStartupSetting,
+            SaveSettings,
+            spritePet,
+            appLauncher,
+            SetPollInterval,
+            PollSoon)
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
@@ -198,6 +206,19 @@ public partial class App : Application
         _monitorIterationRunning = true;
         try
         {
+            // Restore steady interval after a one-shot poll-soon fires.
+            if (_pollSoonPending && _monitorTimer is not null)
+            {
+                _pollSoonPending = false;
+                _monitorTimer.Interval = _steadyPollInterval;
+            }
+
+            if (!settings.ReactToWindowsNotifications)
+            {
+                _mainWindow?.ReportPollStatus("disabled");
+                return;
+            }
+
             _logger?.Info("monitor heartbeat");
 
             IReadOnlyList<HyperNotification> notifications =
@@ -212,6 +233,8 @@ public partial class App : Application
 
                 DispatchIfNew(notification, notificationDedupe, petController, settings);
             }
+
+            _mainWindow?.ReportPollComplete(notifications.Count);
         }
         catch (OperationCanceledException) when (_shutdownCts.IsCancellationRequested)
         {
@@ -219,6 +242,7 @@ public partial class App : Application
         catch (Exception exception)
         {
             _logger?.Error("Notification monitor iteration failed", exception);
+            _mainWindow?.ReportPollStatus("error");
         }
         finally
         {
@@ -286,6 +310,11 @@ public partial class App : Application
         // Marshal to the UI/STA thread before processing.
         notificationListener.NotificationAdded += (_, notification) =>
         {
+            if (!settings.ReactToWindowsNotifications)
+            {
+                return;
+            }
+
             try
             {
                 Dispatcher.InvokeAsync(() =>
@@ -303,7 +332,7 @@ public partial class App : Application
         // (e.g., unpackaged desktop without background task registration).
         _monitorTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromSeconds(30)
+            Interval = PollInterval
         };
         _monitorTimer.Tick += async (_, _) =>
             await MonitorNotificationsIterationAsync(
@@ -312,6 +341,8 @@ public partial class App : Application
                 petController,
                 settings);
         _monitorTimer.Start();
+
+        _mainWindow?.ConfigureDebugPolling(PollInterval);
 
         // Kick off one immediate poll so we don't wait 30s for first sync.
         _ = MonitorNotificationsIterationAsync(
@@ -349,6 +380,36 @@ public partial class App : Application
         }
 
         _startupService.SetEnabled(enabled, executablePath);
+    }
+
+    private TimeSpan _steadyPollInterval = PollInterval;
+    private bool _pollSoonPending;
+
+    private void SetPollInterval(TimeSpan interval)
+    {
+        if (_monitorTimer is null)
+        {
+            return;
+        }
+
+        _steadyPollInterval = interval;
+        _monitorTimer.Interval = interval;
+        _pollSoonPending = false;
+        _logger?.Info($"Poll interval changed to {interval.TotalSeconds}s");
+    }
+
+    private void PollSoon(TimeSpan delay)
+    {
+        if (_monitorTimer is null)
+        {
+            return;
+        }
+
+        _monitorTimer.Stop();
+        _monitorTimer.Interval = delay;
+        _pollSoonPending = true;
+        _monitorTimer.Start();
+        _logger?.Info($"Poll-soon scheduled in {delay.TotalSeconds}s (steady stays {_steadyPollInterval.TotalSeconds}s)");
     }
 
     private void SaveSettings()

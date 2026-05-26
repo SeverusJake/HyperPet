@@ -24,7 +24,8 @@ public partial class SettingsWindow : Window
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
         OnlyMessagingAppsCheckBox.IsChecked = settings.OnlyMessagingApps;
         OpenAppOnBubbleClickCheckBox.IsChecked = settings.OpenAppOnBubbleClick;
-        EnableFrameControlsCheckBox.IsChecked = settings.EnableFrameControls;
+        ReactToWindowsNotificationsCheckBox.IsChecked = settings.ReactToWindowsNotifications;
+        DebugModeCheckBox.IsChecked = settings.DebugMode;
         PetBehaviorComboBox.SelectedIndex = settings.PetBehaviorMode == PetBehaviorMode.Desktop ? 1 : 0;
         AlertDurationSlider.Value = settings.AlertDurationSeconds;
 
@@ -82,7 +83,8 @@ public partial class SettingsWindow : Window
             requestedStartWithWindows,
             OnlyMessagingAppsCheckBox.IsChecked == true,
             OpenAppOnBubbleClickCheckBox.IsChecked == true,
-            EnableFrameControlsCheckBox.IsChecked == true,
+            ReactToWindowsNotificationsCheckBox.IsChecked == true,
+            DebugModeCheckBox.IsChecked == true,
             _messagingApps.Select(vm => vm.ToModel()).ToList(),
             _applyStartupSetting,
             message =>

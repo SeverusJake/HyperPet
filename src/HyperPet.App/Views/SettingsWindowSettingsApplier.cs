@@ -14,7 +14,8 @@ public static class SettingsWindowSettingsApplier
         bool startWithWindows,
         bool onlyMessagingApps,
         bool openAppOnBubbleClick,
-        bool enableFrameControls,
+        bool reactToWindowsNotifications,
+        bool debugMode,
         IReadOnlyList<MessagingAppRule> messagingApps,
         Action<bool> applyStartupSetting,
         Action<string> showStartupWarning)
@@ -42,7 +43,8 @@ public static class SettingsWindowSettingsApplier
         settings.StartWithWindows = startWithWindows;
         settings.OnlyMessagingApps = onlyMessagingApps;
         settings.OpenAppOnBubbleClick = openAppOnBubbleClick;
-        settings.EnableFrameControls = enableFrameControls;
+        settings.ReactToWindowsNotifications = reactToWindowsNotifications;
+        settings.DebugMode = debugMode;
         settings.MessagingApps = messagingApps?.ToList() ?? MessagingAppRule.CreateDefaults().ToList();
 
         return true;

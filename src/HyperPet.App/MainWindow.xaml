@@ -71,5 +71,19 @@
                VerticalAlignment="Bottom"
                RenderOptions.BitmapScalingMode="NearestNeighbor"
                Stretch="None" />
+
+        <Border x:Name="DebugOverlay"
+                Padding="6,3"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="#CC000000"
+                CornerRadius="4"
+                IsHitTestVisible="False"
+                Visibility="Collapsed">
+            <TextBlock x:Name="DebugOverlayText"
+                       FontFamily="Consolas"
+                       FontSize="11"
+                       Foreground="#E0FFE0" />
+        </Border>
     </Grid>
 </Window>
