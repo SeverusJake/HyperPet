@@ -17,6 +17,7 @@ public static class SettingsWindowSettingsApplier
         bool reactToInAppNotifications,
         int windowsPollIntervalSeconds,
         int inAppPollIntervalSeconds,
+        int petSize,
         bool debugMode,
         IReadOnlyList<MessagingAppRule> messagingApps,
         Action<bool> applyStartupSetting,
@@ -48,6 +49,7 @@ public static class SettingsWindowSettingsApplier
         settings.ReactToInAppNotifications = reactToInAppNotifications;
         settings.WindowsNotificationPollIntervalSeconds = Math.Clamp(windowsPollIntervalSeconds, 5, 600);
         settings.InAppNotificationPollIntervalSeconds = Math.Clamp(inAppPollIntervalSeconds, 1, 60);
+        settings.PetSize = Math.Clamp(petSize, 1, 10);
         settings.DebugMode = debugMode;
         settings.MessagingApps = messagingApps?.ToList() ?? MessagingAppRule.CreateDefaults().ToList();
 

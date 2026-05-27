@@ -64,16 +64,31 @@
             </ComboBox>
         </StackPanel>
 
-        <StackPanel Grid.Row="6"
-                    Margin="0,18,0,0">
-            <TextBlock Text="Alert duration (seconds)" />
-            <TextBox x:Name="AlertDurationTextBox"
-                     Margin="0,6,0,0"
-                     Width="80"
-                     HorizontalAlignment="Left"
-                     PreviewTextInput="OnNumericPreviewTextInput"
-                     Text="8" />
-        </StackPanel>
+        <Grid Grid.Row="6"
+              Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Alert duration (seconds)" />
+                <TextBox x:Name="AlertDurationTextBox"
+                         Margin="0,6,0,0"
+                         Width="80"
+                         HorizontalAlignment="Left"
+                         PreviewTextInput="OnNumericPreviewTextInput"
+                         Text="8" />
+            </StackPanel>
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="Pet size (1-10, default 8)" />
+                <TextBox x:Name="PetSizeTextBox"
+                         Margin="0,6,0,0"
+                         Width="80"
+                         HorizontalAlignment="Left"
+                         PreviewTextInput="OnNumericPreviewTextInput"
+                         Text="8" />
+            </StackPanel>
+        </Grid>
 
         <Grid Grid.Row="7"
               Margin="0,18,0,0">
@@ -168,10 +183,21 @@
                     Click="OnRemoveMessagingAppClick" />
         </Grid>
 
-        <Button Grid.Row="10"
-                Width="86"
-                HorizontalAlignment="Right"
-                Content="Close"
-                Click="OnCloseClick" />
+        <StackPanel Grid.Row="10"
+                    Margin="0,8,0,0"
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal">
+            <Button Width="86"
+                    Margin="0,0,8,0"
+                    Content="Save"
+                    Click="OnSaveClick" />
+            <Button Width="86"
+                    Margin="0,0,8,0"
+                    Content="Apply"
+                    Click="OnApplyClick" />
+            <Button Width="86"
+                    Content="Close"
+                    Click="OnCloseClick" />
+        </StackPanel>
     </Grid>
 </Window>

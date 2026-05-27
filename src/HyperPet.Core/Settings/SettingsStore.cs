@@ -73,6 +73,7 @@ public sealed class SettingsStore
                 ? settings.PetBehaviorMode
                 : PetBehaviorMode.Calm,
             AlertDurationSeconds = Math.Clamp(settings.AlertDurationSeconds, 1, 600),
+            PetSize = Math.Clamp(settings.PetSize, 1, 10),
             AlertsPaused = settings.AlertsPaused,
             ShowFullNotificationContent = settings.ShowFullNotificationContent,
             StartWithWindows = settings.StartWithWindows,

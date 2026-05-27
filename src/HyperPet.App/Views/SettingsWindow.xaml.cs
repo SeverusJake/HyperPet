@@ -12,12 +12,17 @@ public partial class SettingsWindow : Window
 {
     private readonly HyperPetSettings _settings;
     private readonly Action<bool> _applyStartupSetting;
+    private readonly Action? _applySettings;
     private readonly ObservableCollection<MessagingAppRuleViewModel> _messagingApps;
 
-    public SettingsWindow(HyperPetSettings settings, Action<bool> applyStartupSetting)
+    public SettingsWindow(
+        HyperPetSettings settings,
+        Action<bool> applyStartupSetting,
+        Action? applySettings = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
+        _applySettings = applySettings;
 
         InitializeComponent();
 
@@ -29,6 +34,7 @@ public partial class SettingsWindow : Window
         DebugModeCheckBox.IsChecked = settings.DebugMode;
         PetBehaviorComboBox.SelectedIndex = settings.PetBehaviorMode == PetBehaviorMode.Desktop ? 1 : 0;
         AlertDurationTextBox.Text = settings.AlertDurationSeconds.ToString();
+        PetSizeTextBox.Text = settings.PetSize.ToString();
         WindowsPollIntervalTextBox.Text = settings.WindowsNotificationPollIntervalSeconds.ToString();
         InAppPollIntervalTextBox.Text = settings.InAppNotificationPollIntervalSeconds.ToString();
 
@@ -78,7 +84,7 @@ public partial class SettingsWindow : Window
         e.Handled = !int.TryParse(e.Text, out _);
     }
 
-    private void OnCloseClick(object sender, RoutedEventArgs e)
+    private bool CommitChanges()
     {
         bool requestedStartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
         PetBehaviorMode requestedPetBehaviorMode = PetBehaviorComboBox.SelectedIndex == 1
@@ -88,6 +94,7 @@ public partial class SettingsWindow : Window
         int alertDuration = ParseOrDefault(AlertDurationTextBox.Text, _settings.AlertDurationSeconds);
         int windowsInterval = ParseOrDefault(WindowsPollIntervalTextBox.Text, _settings.WindowsNotificationPollIntervalSeconds);
         int inAppInterval = ParseOrDefault(InAppPollIntervalTextBox.Text, _settings.InAppNotificationPollIntervalSeconds);
+        int petSize = ParseOrDefault(PetSizeTextBox.Text, _settings.PetSize);
 
         bool applied = SettingsWindowSettingsApplier.TryApply(
             _settings,
@@ -100,6 +107,7 @@ public partial class SettingsWindow : Window
             ReactToInAppNotificationsCheckBox.IsChecked == true,
             windowsInterval,
             inAppInterval,
+            petSize,
             DebugModeCheckBox.IsChecked == true,
             _messagingApps.Select(vm => vm.ToModel()).ToList(),
             _applyStartupSetting,
@@ -116,10 +124,33 @@ public partial class SettingsWindow : Window
 
         if (!applied)
         {
+            return false;
+        }
+
+        _applySettings?.Invoke();
+        return true;
+    }
+
+    private void OnSaveClick(object sender, RoutedEventArgs e)
+    {
+        if (!CommitChanges())
+        {
             return;
         }
 
         DialogResult = true;
+        Close();
+    }
+
+    private void OnApplyClick(object sender, RoutedEventArgs e)
+    {
+        CommitChanges();
+    }
+
+    private void OnCloseClick(object sender, RoutedEventArgs e)
+    {
+        // Discard any pending edits; do not write to settings or persist.
+        DialogResult = false;
         Close();
     }
 

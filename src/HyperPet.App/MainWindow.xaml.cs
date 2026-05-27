@@ -88,7 +88,21 @@ public partial class MainWindow : Window
         }
 
         _petAnimator = new PetAnimator(spritePet, PetImage);
+        ApplyPetSize();
         StartBehaviorMode();
+    }
+
+    private void ApplyPetSize()
+    {
+        const double BaselineWidth = 192.0;
+        const double BaselineHeight = 208.0;
+        const int BaselineSize = 8;
+
+        int size = Math.Clamp(_settings.PetSize, 1, 10);
+        double scale = size / (double)BaselineSize;
+
+        PetImage.Width = BaselineWidth * scale;
+        PetImage.Height = BaselineHeight * scale;
     }
 
     public void ShowAlert(PetAlert alert)
@@ -300,18 +314,27 @@ public partial class MainWindow : Window
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
-        var settingsWindow = new SettingsWindow(_settings, _applyStartupSetting)
+        var settingsWindow = new SettingsWindow(
+            _settings,
+            _applyStartupSetting,
+            RefreshFromSettings)
         {
             Owner = this
         };
 
-        if (settingsWindow.ShowDialog() == true)
-        {
-            _saveSettings();
-            StartBehaviorMode();
-            ApplyDebugOverlayVisibility();
-            _applyMonitoringSettings?.Invoke();
-        }
+        settingsWindow.ShowDialog();
+    }
+
+    private void RefreshFromSettings()
+    {
+        // Called by SettingsWindow on Save or Apply. Persists the new values
+        // and pushes them into the running app (pet size, behavior, debug
+        // overlay, monitor intervals).
+        _saveSettings();
+        ApplyPetSize();
+        StartBehaviorMode();
+        ApplyDebugOverlayVisibility();
+        _applyMonitoringSettings?.Invoke();
     }
 
     /// <summary>

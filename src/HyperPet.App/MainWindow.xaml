@@ -67,10 +67,10 @@
         <Image x:Name="PetImage"
                Width="192"
                Height="208"
-               HorizontalAlignment="Right"
-               VerticalAlignment="Bottom"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
                RenderOptions.BitmapScalingMode="NearestNeighbor"
-               Stretch="None" />
+               Stretch="Uniform" />
 
         <Border x:Name="DebugOverlay"
                 Padding="6,3"

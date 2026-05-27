@@ -35,6 +35,7 @@ public sealed class SettingsWindowSettingsApplierTests
             reactToInAppNotifications: false,
             windowsPollIntervalSeconds: 15,
             inAppPollIntervalSeconds: 5,
+            petSize: 7,
             debugMode: false,
             messagingApps: new List<MessagingAppRule>
             {
@@ -90,6 +91,7 @@ public sealed class SettingsWindowSettingsApplierTests
             reactToInAppNotifications: false,
             windowsPollIntervalSeconds: 45,
             inAppPollIntervalSeconds: 4,
+            petSize: 10,
             debugMode: true,
             messagingApps: newApps,
             applyStartupSetting: value => appliedStartup = value,
@@ -106,6 +108,7 @@ public sealed class SettingsWindowSettingsApplierTests
         Assert.False(settings.ReactToInAppNotifications);
         Assert.Equal(45, settings.WindowsNotificationPollIntervalSeconds);
         Assert.Equal(4, settings.InAppNotificationPollIntervalSeconds);
+        Assert.Equal(10, settings.PetSize);
         Assert.True(settings.DebugMode);
         Assert.Equal(2, settings.MessagingApps.Count);
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Telegram");
