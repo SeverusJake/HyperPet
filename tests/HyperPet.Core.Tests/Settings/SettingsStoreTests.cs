@@ -26,7 +26,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.True(settings.ReactToInAppNotifications);
         Assert.Equal(30, settings.WindowsNotificationPollIntervalSeconds);
         Assert.Equal(2, settings.InAppNotificationPollIntervalSeconds);
-        Assert.False(settings.OpenAppOnBubbleClick);
+        Assert.True(settings.OpenAppOnBubbleClick);
         Assert.Equal(3, settings.MessagingApps.Count);
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Discord");
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Zalo");

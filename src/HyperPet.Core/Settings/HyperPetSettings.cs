@@ -24,7 +24,7 @@ public sealed class HyperPetSettings
     /// When true, single-clicking the speech bubble launches the source
     /// messaging app (when its AppUserModelId is known).
     /// </summary>
-    public bool OpenAppOnBubbleClick { get; set; }
+    public bool OpenAppOnBubbleClick { get; set; } = true;
 
     /// <summary>
     /// Master toggle for the Windows Action Center polling pipeline. When
@@ -63,6 +63,22 @@ public sealed class HyperPetSettings
     /// toasts into the Windows Action Center.
     /// </summary>
     public List<string> WatchedInAppProcesses { get; set; } = new() { "Zalo" };
+
+    /// <summary>
+    /// Per-pet, per-state animation FPS overrides. Outer key is pet id (e.g.
+    /// "miku-kimono"), inner key is the state name as it appears in pet.json
+    /// (e.g. "idle", "runRight"). When a state is not present in the inner
+    /// dictionary, the pet.json default fps is used.
+    /// </summary>
+    public Dictionary<string, Dictionary<string, int>> StateSpeedOverrides { get; set; } = new();
+
+    /// <summary>
+    /// Per-pet, per-state animation play-mode overrides (Forward / Reverse /
+    /// PingPong). Same shape as <see cref="StateSpeedOverrides"/>: outer key
+    /// is pet id, inner key is the state name from pet.json. Missing entries
+    /// fall back to the pet.json playMode (or Forward when unspecified).
+    /// </summary>
+    public Dictionary<string, Dictionary<string, PlayMode>> StatePlayModeOverrides { get; set; } = new();
 
     public static HyperPetSettings CreateDefault() => new();
 }

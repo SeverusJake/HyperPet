@@ -10,6 +10,7 @@ using HyperPet.App.Views;
 using HyperPet.Core.Diagnostics;
 using HyperPet.Core.Notifications;
 using HyperPet.Core.Pet;
+using HyperPet.Core.Pets;
 using HyperPet.Core.Settings;
 using HyperPet.Windows.Notifications;
 using HyperPet.Windows.Startup;
@@ -64,11 +65,34 @@ public partial class App : Application
         var debugSimulator = new DebugNotificationSimulator(_logger);
         SpritePet? spritePet = await TryLoadSpritePetAsync(_logger);
 
+        // Snapshot original per-state fps + play mode BEFORE applying any
+        // user overrides so the Settings dialog's "Reset" / "Default" can
+        // restore pet.json values later in the session.
+        Dictionary<string, int>? originalStateFps = null;
+        Dictionary<string, PlayMode>? originalStatePlayMode = null;
+        if (spritePet is not null)
+        {
+            originalStateFps = spritePet.Definition.States.ToDictionary(
+                kv => kv.Key,
+                kv => kv.Value.Fps,
+                StringComparer.OrdinalIgnoreCase);
+
+            originalStatePlayMode = spritePet.Definition.States.ToDictionary(
+                kv => kv.Key,
+                kv => kv.Value.PlayMode,
+                StringComparer.OrdinalIgnoreCase);
+
+            ApplyStateSpeedOverrides(spritePet, _settings);
+            ApplyStatePlayModeOverrides(spritePet, _settings);
+        }
+
         _mainWindow = new MainWindow(
             _settings,
             ApplyStartupSetting,
             SaveSettings,
             spritePet,
+            originalStateFps,
+            originalStatePlayMode,
             appLauncher,
             SetPollInterval,
             PollSoon,
@@ -447,6 +471,38 @@ public partial class App : Application
         {
             logger.Error($"Could not load sprite pet from '{petDirectory}'", exception);
             return null;
+        }
+    }
+
+    private static void ApplyStateSpeedOverrides(SpritePet spritePet, HyperPetSettings settings)
+    {
+        if (!settings.StateSpeedOverrides.TryGetValue(spritePet.Definition.Id, out var perPet))
+        {
+            return;
+        }
+
+        foreach (var (stateName, fps) in perPet)
+        {
+            if (spritePet.Definition.States.TryGetValue(stateName, out var state) && fps >= 1 && fps <= 60)
+            {
+                state.Fps = fps;
+            }
+        }
+    }
+
+    private static void ApplyStatePlayModeOverrides(SpritePet spritePet, HyperPetSettings settings)
+    {
+        if (!settings.StatePlayModeOverrides.TryGetValue(spritePet.Definition.Id, out var perPet))
+        {
+            return;
+        }
+
+        foreach (var (stateName, mode) in perPet)
+        {
+            if (spritePet.Definition.States.TryGetValue(stateName, out var state))
+            {
+                state.PlayMode = mode;
+            }
         }
     }
 

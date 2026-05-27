@@ -8,8 +8,8 @@
   "frameHeight": 208,
   "states": {
     "idle": { "row": 0, "frames": 8, "fps": 1, "loop": true },
-    "runRight": { "row": 1, "frames": 8, "fps": 12, "loop": true },
-    "runLeft": { "row": 2, "frames": 8, "fps": 12, "loop": true },
+    "runRight": { "row": 1, "frames": 8, "fps": 12, "loop": true, "playMode": "Reverse" },
+    "runLeft": { "row": 2, "frames": 8, "fps": 12, "loop": true, "playMode": "Reverse" },
     "waving": { "row": 3, "frames": 8, "fps": 8, "loop": true },
     "jumping": { "row": 4, "frames": 8, "fps": 10, "loop": false },
     "failed": { "row": 5, "frames": 8, "fps": 8, "loop": false },

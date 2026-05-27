@@ -13,6 +13,9 @@ public sealed class PetAnimator
     private IReadOnlyList<BitmapSource> _frames = Array.Empty<BitmapSource>();
     private PetAnimationState? _state;
     private int _frameIndex;
+    // Direction for PingPong (and the underlying iterator for Forward/Reverse).
+    // +1 means moving toward the higher frame index, -1 toward 0.
+    private int _direction = 1;
     private bool _paused;
 
     public PetAnimator(SpritePet spritePet, Image image)
@@ -38,7 +41,8 @@ public sealed class PetAnimator
         StateName = stateName;
         _state = _spritePet.Definition.GetState(stateName);
         _frames = _spritePet.GetFrames(stateName);
-        _frameIndex = 0;
+
+        InitializeForPlayMode();
 
         if (_frames.Count == 0)
         {
@@ -114,6 +118,33 @@ public sealed class PetAnimator
         _image.Source = _frames[_frameIndex];
     }
 
+    private void InitializeForPlayMode()
+    {
+        if (_state is null || _frames.Count == 0)
+        {
+            _frameIndex = 0;
+            _direction = 1;
+            return;
+        }
+
+        switch (_state.PlayMode)
+        {
+            case PlayMode.Reverse:
+                _frameIndex = _frames.Count - 1;
+                _direction = -1;
+                break;
+            case PlayMode.PingPong:
+                _frameIndex = 0;
+                _direction = 1;
+                break;
+            case PlayMode.Forward:
+            default:
+                _frameIndex = 0;
+                _direction = 1;
+                break;
+        }
+    }
+
     private void OnTick(object? sender, EventArgs e)
     {
         if (_frames.Count == 0 || _state is null || _paused)
@@ -122,21 +153,82 @@ public sealed class PetAnimator
             return;
         }
 
-        if (_frameIndex >= _frames.Count - 1)
-        {
-            if (!_state.Loop)
-            {
-                _timer.Stop();
-                return;
-            }
-
-            _frameIndex = 0;
-        }
-        else
-        {
-            _frameIndex++;
-        }
-
+        AdvanceFrame();
         _image.Source = _frames[_frameIndex];
+    }
+
+    private void AdvanceFrame()
+    {
+        if (_state is null)
+        {
+            return;
+        }
+
+        int last = _frames.Count - 1;
+
+        switch (_state.PlayMode)
+        {
+            case PlayMode.Reverse:
+                if (_frameIndex <= 0)
+                {
+                    if (!_state.Loop)
+                    {
+                        _timer.Stop();
+                        return;
+                    }
+                    _frameIndex = last;
+                }
+                else
+                {
+                    _frameIndex--;
+                }
+                break;
+
+            case PlayMode.PingPong:
+                int next = _frameIndex + _direction;
+                if (next > last)
+                {
+                    // Hit the end going forward; flip direction and step back.
+                    if (!_state.Loop)
+                    {
+                        _timer.Stop();
+                        return;
+                    }
+                    _direction = -1;
+                    _frameIndex = Math.Max(0, last - 1);
+                }
+                else if (next < 0)
+                {
+                    if (!_state.Loop)
+                    {
+                        _timer.Stop();
+                        return;
+                    }
+                    _direction = 1;
+                    _frameIndex = Math.Min(last, 1);
+                }
+                else
+                {
+                    _frameIndex = next;
+                }
+                break;
+
+            case PlayMode.Forward:
+            default:
+                if (_frameIndex >= last)
+                {
+                    if (!_state.Loop)
+                    {
+                        _timer.Stop();
+                        return;
+                    }
+                    _frameIndex = 0;
+                }
+                else
+                {
+                    _frameIndex++;
+                }
+                break;
+        }
     }
 }

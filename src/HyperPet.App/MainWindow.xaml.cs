@@ -30,6 +30,9 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _debugOverlayTimer = new();
     private readonly Random _random = new();
     private readonly PetAnimator? _petAnimator;
+    private readonly SpritePet? _spritePet;
+    private readonly IReadOnlyDictionary<string, int>? _originalStateFps;
+    private readonly IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
     private bool _movingRight = true;
     private bool _alertActive;
     private TimeSpan _debugPollInterval = TimeSpan.FromSeconds(30);
@@ -44,6 +47,8 @@ public partial class MainWindow : Window
         Action<bool> applyStartupSetting,
         Action saveSettings,
         SpritePet? spritePet,
+        IReadOnlyDictionary<string, int>? originalStateFps = null,
+        IReadOnlyDictionary<string, PlayMode>? originalStatePlayMode = null,
         IAppLauncher? appLauncher = null,
         Action<TimeSpan>? setPollInterval = null,
         Action<TimeSpan>? pollSoon = null,
@@ -53,6 +58,9 @@ public partial class MainWindow : Window
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
         _saveSettings = saveSettings;
+        _spritePet = spritePet;
+        _originalStateFps = originalStateFps;
+        _originalStatePlayMode = originalStatePlayMode;
         _appLauncher = appLauncher;
         _setPollInterval = setPollInterval;
         _pollSoon = pollSoon;
@@ -317,7 +325,10 @@ public partial class MainWindow : Window
         var settingsWindow = new SettingsWindow(
             _settings,
             _applyStartupSetting,
-            RefreshFromSettings)
+            RefreshFromSettings,
+            _spritePet,
+            _originalStateFps,
+            _originalStatePlayMode)
         {
             Owner = this
         };
@@ -329,9 +340,16 @@ public partial class MainWindow : Window
     {
         // Called by SettingsWindow on Save or Apply. Persists the new values
         // and pushes them into the running app (pet size, behavior, debug
-        // overlay, monitor intervals).
+        // overlay, monitor intervals, state-animation fps).
         _saveSettings();
         ApplyPetSize();
+        // Restart the current animator state so any state-speed overrides
+        // applied to the SpritePet definition take effect on the live pet
+        // instead of waiting for the next state transition.
+        if (_petAnimator is { } animator && !string.IsNullOrEmpty(animator.StateName))
+        {
+            animator.Play(animator.StateName);
+        }
         StartBehaviorMode();
         ApplyDebugOverlayVisibility();
         _applyMonitoringSettings?.Invoke();
