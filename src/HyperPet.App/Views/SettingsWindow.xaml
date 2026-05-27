@@ -51,7 +51,7 @@
                       Content="React to Windows notifications" />
             <CheckBox x:Name="DebugModeCheckBox"
                       Margin="0,8,0,0"
-                      Content="Debug overlay (poll countdown + F1/F2/F3 frame controls + number-key shortcuts)" />
+                      Content="Debug" />
         </StackPanel>
 
         <StackPanel Grid.Row="6"

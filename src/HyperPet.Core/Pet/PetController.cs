@@ -28,13 +28,17 @@ public sealed class PetController
             return null;
         }
 
-        if (settings.OnlyMessagingApps)
+        var filter = _messagingAppFilter ?? new MessagingAppFilter(settings.MessagingApps);
+        bool isMessaging = filter.IsMessagingApp(notification);
+
+        if (isMessaging && !settings.ReactToMessagingApps)
         {
-            var filter = _messagingAppFilter ?? new MessagingAppFilter(settings.MessagingApps);
-            if (!filter.IsMessagingApp(notification))
-            {
-                return null;
-            }
+            return null;
+        }
+
+        if (!isMessaging && !settings.ReactToWindowsNotifications)
+        {
+            return null;
         }
 
         var title = settings.ShowFullNotificationContent ? notification.Title : "Notification";

@@ -9,4 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="..\HyperPet.Core\HyperPet.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.WinUI.Notifications" Version="7.1.2" />
+  </ItemGroup>
 </Project>

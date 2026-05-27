@@ -22,7 +22,7 @@ public partial class SettingsWindow : Window
 
         ShowFullContentCheckBox.IsChecked = settings.ShowFullNotificationContent;
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
-        OnlyMessagingAppsCheckBox.IsChecked = settings.OnlyMessagingApps;
+        OnlyMessagingAppsCheckBox.IsChecked = settings.ReactToMessagingApps;
         OpenAppOnBubbleClickCheckBox.IsChecked = settings.OpenAppOnBubbleClick;
         ReactToWindowsNotificationsCheckBox.IsChecked = settings.ReactToWindowsNotifications;
         DebugModeCheckBox.IsChecked = settings.DebugMode;
@@ -81,7 +81,7 @@ public partial class SettingsWindow : Window
             requestedPetBehaviorMode,
             (int)Math.Round(AlertDurationSlider.Value),
             requestedStartWithWindows,
-            OnlyMessagingAppsCheckBox.IsChecked == true,
+            reactToMessagingApps: OnlyMessagingAppsCheckBox.IsChecked == true,
             OpenAppOnBubbleClickCheckBox.IsChecked == true,
             ReactToWindowsNotificationsCheckBox.IsChecked == true,
             DebugModeCheckBox.IsChecked == true,

@@ -7,6 +7,7 @@ using HyperPet.App.ViewModels;
 using HyperPet.Core.Pet;
 using HyperPet.Core.Pets;
 using HyperPet.App.Views;
+using HyperPet.Windows.Notifications;
 using HyperPet.Windows.Startup;
 
 namespace HyperPet.App;
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     private readonly Action _saveSettings;
     private readonly Action<TimeSpan>? _setPollInterval;
     private readonly Action<TimeSpan>? _pollSoon;
+    private readonly DebugNotificationSimulator? _debugSimulator;
     private readonly IAppLauncher? _appLauncher;
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
@@ -33,6 +35,7 @@ public partial class MainWindow : Window
     private int _debugLastPollCount;
     private int _debugTotalAlerts;
     private string _debugStatus = "starting";
+    private bool _debugOverlayHidden;
 
     public MainWindow(
         HyperPetSettings settings,
@@ -41,7 +44,8 @@ public partial class MainWindow : Window
         SpritePet? spritePet,
         IAppLauncher? appLauncher = null,
         Action<TimeSpan>? setPollInterval = null,
-        Action<TimeSpan>? pollSoon = null)
+        Action<TimeSpan>? pollSoon = null,
+        DebugNotificationSimulator? debugSimulator = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -49,6 +53,7 @@ public partial class MainWindow : Window
         _appLauncher = appLauncher;
         _setPollInterval = setPollInterval;
         _pollSoon = pollSoon;
+        _debugSimulator = debugSimulator;
 
         InitializeComponent();
 
@@ -65,6 +70,7 @@ public partial class MainWindow : Window
         _movementTimer.Tick += OnMovementTimerTick;
         _debugOverlayTimer.Interval = TimeSpan.FromSeconds(1);
         _debugOverlayTimer.Tick += OnDebugOverlayTimerTick;
+        HelpOverlayText.Text = BuildHelpText();
         Loaded += (_, _) =>
         {
             ClampToWorkArea();
@@ -335,7 +341,9 @@ public partial class MainWindow : Window
 
     private void ApplyDebugOverlayVisibility()
     {
-        if (_settings.DebugMode)
+        bool showOverlay = _settings.DebugMode && !_debugOverlayHidden;
+
+        if (showOverlay)
         {
             DebugOverlay.Visibility = Visibility.Visible;
             _debugOverlayTimer.Start();
@@ -346,6 +354,43 @@ public partial class MainWindow : Window
             _debugOverlayTimer.Stop();
             DebugOverlay.Visibility = Visibility.Collapsed;
         }
+
+        // Help overlay only meaningful while DebugMode is on. Hide it when the
+        // user disables Debug from settings.
+        if (!_settings.DebugMode && HelpOverlay.Visibility == Visibility.Visible)
+        {
+            HelpOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void ToggleDebugOverlayPill()
+    {
+        _debugOverlayHidden = !_debugOverlayHidden;
+        ApplyDebugOverlayVisibility();
+    }
+
+    private void ToggleHelpOverlay()
+    {
+        HelpOverlay.Visibility = HelpOverlay.Visibility == Visibility.Visible
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private static string BuildHelpText()
+    {
+        return string.Join(
+            Environment.NewLine,
+            "Debug keys (focus pet, Debug on):",
+            "  1   poll-soon 5s (one-shot)",
+            "  2   set interval 2s",
+            "  3   set interval 30s",
+            "  4   toggle this help",
+            "  5   toggle overlay pill",
+            "  9   simulate messenger toast",
+            "  0   simulate generic toast",
+            "  F1  sprite frame prev",
+            "  F2  sprite frame next",
+            "  F3  sprite pause/resume");
     }
 
     private void OnDebugOverlayTimerTick(object? sender, EventArgs e)
@@ -365,6 +410,33 @@ public partial class MainWindow : Window
 
         DebugOverlayText.Text =
             $"next poll: {seconds}s  |  last: {_debugLastPollCount}  |  alerts: {_debugTotalAlerts}  |  {_debugStatus}";
+    }
+
+    private void TrySimulateNotification(bool messaging)
+    {
+        if (_debugSimulator is null)
+        {
+            ReportPollStatus("sim N/A");
+            return;
+        }
+
+        try
+        {
+            if (messaging)
+            {
+                _debugSimulator.SimulateMessagingNotification();
+                ReportPollStatus("sim:msg sent");
+            }
+            else
+            {
+                _debugSimulator.SimulateGenericNotification();
+                ReportPollStatus("sim:generic sent");
+            }
+        }
+        catch (Exception exception)
+        {
+            ReportPollStatus($"sim error: {exception.GetType().Name}");
+        }
     }
 
     private void OnQuitClick(object sender, RoutedEventArgs e)
@@ -403,6 +475,26 @@ public partial class MainWindow : Window
                 _setPollInterval?.Invoke(TimeSpan.FromSeconds(30));
                 ConfigureDebugPolling(TimeSpan.FromSeconds(30));
                 ReportPollStatus("interval=30s");
+                e.Handled = true;
+                return;
+            case Key.D4:
+            case Key.NumPad4:
+                ToggleHelpOverlay();
+                e.Handled = true;
+                return;
+            case Key.D5:
+            case Key.NumPad5:
+                ToggleDebugOverlayPill();
+                e.Handled = true;
+                return;
+            case Key.D9:
+            case Key.NumPad9:
+                TrySimulateNotification(messaging: true);
+                e.Handled = true;
+                return;
+            case Key.D0:
+            case Key.NumPad0:
+                TrySimulateNotification(messaging: false);
                 e.Handled = true;
                 return;
         }

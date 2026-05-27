@@ -59,6 +59,7 @@ public partial class App : Application
         var notificationListener = new WindowsNotificationListener(_logger);
         _notificationListener = notificationListener;
         var appLauncher = new AppLauncher();
+        var debugSimulator = new DebugNotificationSimulator(_logger);
         SpritePet? spritePet = await TryLoadSpritePetAsync(_logger);
 
         _mainWindow = new MainWindow(
@@ -68,7 +69,8 @@ public partial class App : Application
             spritePet,
             appLauncher,
             SetPollInterval,
-            PollSoon)
+            PollSoon,
+            debugSimulator)
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
@@ -213,7 +215,7 @@ public partial class App : Application
                 _monitorTimer.Interval = _steadyPollInterval;
             }
 
-            if (!settings.ReactToWindowsNotifications)
+            if (!settings.ReactToMessagingApps && !settings.ReactToWindowsNotifications)
             {
                 _mainWindow?.ReportPollStatus("disabled");
                 return;
@@ -259,6 +261,12 @@ public partial class App : Application
         if (!notificationDedupe.ShouldAlert(notification))
         {
             return;
+        }
+
+        if (AppRuleAutoDiscovery.TryRegister(settings, notification))
+        {
+            _logger?.Info($"Auto-discovered new app: {notification.AppName} (AUMI={notification.AppUserModelId})");
+            SaveSettings();
         }
 
         PetAlert? alert = petController.HandleNotification(notification, settings);
@@ -310,11 +318,6 @@ public partial class App : Application
         // Marshal to the UI/STA thread before processing.
         notificationListener.NotificationAdded += (_, notification) =>
         {
-            if (!settings.ReactToWindowsNotifications)
-            {
-                return;
-            }
-
             try
             {
                 Dispatcher.InvokeAsync(() =>

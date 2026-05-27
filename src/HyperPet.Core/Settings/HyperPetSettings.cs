@@ -15,10 +15,11 @@ public sealed class HyperPetSettings
     public double PetTop { get; set; } = 80;
 
     /// <summary>
-    /// When true, the pet only reacts to notifications from apps matching one
-    /// of the rules in <see cref="MessagingApps"/>.
+    /// When true, the pet reacts to notifications from apps matching one of
+    /// the rules in <see cref="MessagingApps"/>. Combine with
+    /// <see cref="ReactToWindowsNotifications"/> to control the other category.
     /// </summary>
-    public bool OnlyMessagingApps { get; set; } = true;
+    public bool ReactToMessagingApps { get; set; } = true;
 
     /// <summary>
     /// When true, single-clicking the speech bubble launches the source
@@ -27,9 +28,11 @@ public sealed class HyperPetSettings
     public bool OpenAppOnBubbleClick { get; set; }
 
     /// <summary>
-    /// Master toggle for the Windows notification listener. When false, the
-    /// app stops polling and stops dispatching pet alerts. Useful for going
-    /// "silent" without quitting the app.
+    /// When true, the pet reacts to notifications from apps that do NOT match
+    /// any rule in <see cref="MessagingApps"/> (i.e., generic Windows toasts
+    /// like system updates, browser site notifications, calendar reminders,
+    /// game alerts, etc.). Combine with <see cref="ReactToMessagingApps"/> to
+    /// control the messaging category.
     /// </summary>
     public bool ReactToWindowsNotifications { get; set; } = true;
 

@@ -16,7 +16,7 @@ public sealed class SettingsWindowSettingsApplierTests
             StartWithWindows = false,
             PetBehaviorMode = PetBehaviorMode.Calm,
             AlertDurationSeconds = 8,
-            OnlyMessagingApps = true,
+            ReactToMessagingApps = true,
             OpenAppOnBubbleClick = false
         };
         string? warning = null;
@@ -27,7 +27,7 @@ public sealed class SettingsWindowSettingsApplierTests
             petBehaviorMode: PetBehaviorMode.Desktop,
             alertDurationSeconds: 20,
             startWithWindows: true,
-            onlyMessagingApps: false,
+            reactToMessagingApps: false,
             openAppOnBubbleClick: true,
             reactToWindowsNotifications: true,
             debugMode: false,
@@ -43,7 +43,7 @@ public sealed class SettingsWindowSettingsApplierTests
         Assert.False(settings.StartWithWindows);
         Assert.Equal(PetBehaviorMode.Calm, settings.PetBehaviorMode);
         Assert.Equal(8, settings.AlertDurationSeconds);
-        Assert.True(settings.OnlyMessagingApps);
+        Assert.True(settings.ReactToMessagingApps);
         Assert.False(settings.OpenAppOnBubbleClick);
         Assert.Contains("Startup was left unchanged", warning);
     }
@@ -57,7 +57,7 @@ public sealed class SettingsWindowSettingsApplierTests
             StartWithWindows = false,
             PetBehaviorMode = PetBehaviorMode.Calm,
             AlertDurationSeconds = 8,
-            OnlyMessagingApps = false,
+            ReactToMessagingApps = false,
             OpenAppOnBubbleClick = false
         };
         bool? appliedStartup = null;
@@ -74,7 +74,7 @@ public sealed class SettingsWindowSettingsApplierTests
             petBehaviorMode: PetBehaviorMode.Desktop,
             alertDurationSeconds: 20,
             startWithWindows: true,
-            onlyMessagingApps: true,
+            reactToMessagingApps: true,
             openAppOnBubbleClick: true,
             reactToWindowsNotifications: true,
             debugMode: true,
@@ -88,7 +88,7 @@ public sealed class SettingsWindowSettingsApplierTests
         Assert.True(settings.StartWithWindows);
         Assert.Equal(PetBehaviorMode.Desktop, settings.PetBehaviorMode);
         Assert.Equal(20, settings.AlertDurationSeconds);
-        Assert.True(settings.OnlyMessagingApps);
+        Assert.True(settings.ReactToMessagingApps);
         Assert.True(settings.OpenAppOnBubbleClick);
         Assert.True(settings.ReactToWindowsNotifications);
         Assert.True(settings.DebugMode);

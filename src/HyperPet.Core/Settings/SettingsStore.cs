@@ -78,7 +78,7 @@ public sealed class SettingsStore
             StartWithWindows = settings.StartWithWindows,
             PetLeft = settings.PetLeft,
             PetTop = settings.PetTop,
-            OnlyMessagingApps = settings.OnlyMessagingApps,
+            ReactToMessagingApps = settings.ReactToMessagingApps,
             OpenAppOnBubbleClick = settings.OpenAppOnBubbleClick,
             ReactToWindowsNotifications = settings.ReactToWindowsNotifications,
             DebugMode = settings.DebugMode,

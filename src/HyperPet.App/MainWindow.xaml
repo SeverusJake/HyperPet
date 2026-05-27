@@ -85,5 +85,20 @@
                        FontSize="11"
                        Foreground="#E0FFE0" />
         </Border>
+
+        <Border x:Name="HelpOverlay"
+                Margin="0,28,0,0"
+                Padding="10,8"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="#DD000000"
+                CornerRadius="6"
+                IsHitTestVisible="False"
+                Visibility="Collapsed">
+            <TextBlock x:Name="HelpOverlayText"
+                       FontFamily="Consolas"
+                       FontSize="11"
+                       Foreground="#E0FFE0" />
+        </Border>
     </Grid>
 </Window>

@@ -12,7 +12,7 @@ public static class SettingsWindowSettingsApplier
         PetBehaviorMode petBehaviorMode,
         int alertDurationSeconds,
         bool startWithWindows,
-        bool onlyMessagingApps,
+        bool reactToMessagingApps,
         bool openAppOnBubbleClick,
         bool reactToWindowsNotifications,
         bool debugMode,
@@ -41,7 +41,7 @@ public static class SettingsWindowSettingsApplier
         settings.PetBehaviorMode = petBehaviorMode;
         settings.AlertDurationSeconds = alertDurationSeconds;
         settings.StartWithWindows = startWithWindows;
-        settings.OnlyMessagingApps = onlyMessagingApps;
+        settings.ReactToMessagingApps = reactToMessagingApps;
         settings.OpenAppOnBubbleClick = openAppOnBubbleClick;
         settings.ReactToWindowsNotifications = reactToWindowsNotifications;
         settings.DebugMode = debugMode;

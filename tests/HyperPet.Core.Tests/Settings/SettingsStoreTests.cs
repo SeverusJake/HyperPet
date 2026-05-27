@@ -22,7 +22,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.False(settings.AlertsPaused);
         Assert.True(settings.ShowFullNotificationContent);
         Assert.False(settings.StartWithWindows);
-        Assert.True(settings.OnlyMessagingApps);
+        Assert.True(settings.ReactToMessagingApps);
         Assert.False(settings.OpenAppOnBubbleClick);
         Assert.Equal(3, settings.MessagingApps.Count);
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Discord");
@@ -46,7 +46,7 @@ public sealed class SettingsStoreTests : IDisposable
             StartWithWindows = true,
             PetLeft = 140,
             PetTop = 220,
-            OnlyMessagingApps = false,
+            ReactToMessagingApps = false,
             OpenAppOnBubbleClick = true,
             MessagingApps = new List<MessagingAppRule>
             {
@@ -66,7 +66,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(expected.StartWithWindows, actual.StartWithWindows);
         Assert.Equal(expected.PetLeft, actual.PetLeft);
         Assert.Equal(expected.PetTop, actual.PetTop);
-        Assert.False(actual.OnlyMessagingApps);
+        Assert.False(actual.ReactToMessagingApps);
         Assert.True(actual.OpenAppOnBubbleClick);
         Assert.Equal(2, actual.MessagingApps.Count);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Telegram" && app.Enabled);

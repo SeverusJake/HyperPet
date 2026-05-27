@@ -53,11 +53,12 @@ public sealed class PetControllerTests
     }
 
     [Fact]
-    public void HandleNotification_WhenOnlyMessagingApps_FiltersOutNonMessaging()
+    public void HandleNotification_WhenOnlyMessagingCategoryOn_FiltersOutNonMessaging()
     {
         var controller = new PetController();
         var settings = HyperPetSettings.CreateDefault();
-        settings.OnlyMessagingApps = true;
+        settings.ReactToMessagingApps = true;
+        settings.ReactToWindowsNotifications = false;
 
         var notification = new HyperNotification(
             "outlook-1",
@@ -75,11 +76,12 @@ public sealed class PetControllerTests
     }
 
     [Fact]
-    public void HandleNotification_WhenOnlyMessagingApps_AllowsMatchingApp()
+    public void HandleNotification_WhenOnlyMessagingCategoryOn_AllowsMatchingApp()
     {
         var controller = new PetController();
         var settings = HyperPetSettings.CreateDefault();
-        settings.OnlyMessagingApps = true;
+        settings.ReactToMessagingApps = true;
+        settings.ReactToWindowsNotifications = false;
 
         var alert = controller.HandleNotification(CreateNotification(), settings);
 
@@ -87,11 +89,12 @@ public sealed class PetControllerTests
     }
 
     [Fact]
-    public void HandleNotification_WhenOnlyMessagingAppsDisabled_AllowsAnyApp()
+    public void HandleNotification_WhenBothCategoriesOn_AllowsAnyApp()
     {
         var controller = new PetController();
         var settings = HyperPetSettings.CreateDefault();
-        settings.OnlyMessagingApps = false;
+        settings.ReactToMessagingApps = true;
+        settings.ReactToWindowsNotifications = true;
 
         var notification = new HyperNotification(
             "outlook-1",
@@ -105,6 +108,33 @@ public sealed class PetControllerTests
         var alert = controller.HandleNotification(notification, settings);
 
         Assert.NotNull(alert);
+    }
+
+    [Fact]
+    public void HandleNotification_WhenOnlyWindowsCategoryOn_FiltersOutMessaging()
+    {
+        var controller = new PetController();
+        var settings = HyperPetSettings.CreateDefault();
+        settings.ReactToMessagingApps = false;
+        settings.ReactToWindowsNotifications = true;
+
+        var alert = controller.HandleNotification(CreateNotification(), settings);
+
+        Assert.Null(alert);
+        Assert.Equal(PetState.Idle, controller.State);
+    }
+
+    [Fact]
+    public void HandleNotification_WhenBothCategoriesOff_FiltersEverything()
+    {
+        var controller = new PetController();
+        var settings = HyperPetSettings.CreateDefault();
+        settings.ReactToMessagingApps = false;
+        settings.ReactToWindowsNotifications = false;
+
+        var alert = controller.HandleNotification(CreateNotification(), settings);
+
+        Assert.Null(alert);
     }
 
     [Fact]
