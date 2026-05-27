@@ -48,7 +48,10 @@ public sealed class InAppNotificationWatcher : IDisposable
 
     private readonly DispatcherTimer _timer;
     private readonly HyperPetLogger? _logger;
-    private readonly HashSet<IntPtr> _seenHandles = new();
+    // hwnd -> last emitted content hash. Real Zalo / Electron popups often
+    // reuse the same HWND for successive messages (text swapped in-place);
+    // keying off handle alone would suppress every message after the first.
+    private readonly Dictionary<IntPtr, string> _seenHandles = new();
     private readonly HashSet<IntPtr> _excludedHandles = new();
     private readonly string _selfProcessName = Process.GetCurrentProcess().ProcessName;
     private IReadOnlyList<string> _watchedProcessNames = Array.Empty<string>();
@@ -169,13 +172,21 @@ public sealed class InAppNotificationWatcher : IDisposable
 
                 liveHandles.Add(hwnd);
 
-                if (_seenHandles.Contains(hwnd))
+                // Resolve display name first so ExtractText can filter the
+                // app name out as junk.
+                bool isSelfProc = string.Equals(processName, _selfProcessName, StringComparison.OrdinalIgnoreCase);
+                string appName = isSelfProc ? "Sim" : processName;
+
+                (string title, string body) = ExtractText(hwnd, appName);
+                string contentHash = HashText(title + "" + body);
+
+                if (_seenHandles.TryGetValue(hwnd, out string? lastHash) && lastHash == contentHash)
                 {
                     return true;
                 }
 
-                _seenHandles.Add(hwnd);
-                EmitFor(hwnd, processName);
+                _seenHandles[hwnd] = contentHash;
+                EmitFor(hwnd, processName, appName, title, body);
                 return true;
             }, IntPtr.Zero);
         }
@@ -185,7 +196,11 @@ public sealed class InAppNotificationWatcher : IDisposable
         }
 
         // Drop handles that no longer exist or moved out of the popup filter.
-        _seenHandles.RemoveWhere(h => !liveHandles.Contains(h));
+        var stale = _seenHandles.Keys.Where(h => !liveHandles.Contains(h)).ToList();
+        foreach (var h in stale)
+        {
+            _seenHandles.Remove(h);
+        }
     }
 
     private Dictionary<int, string> ResolveWatchedPids()
@@ -302,15 +317,8 @@ public sealed class InAppNotificationWatcher : IDisposable
         return len > 0 ? buffer.ToString() : string.Empty;
     }
 
-    private void EmitFor(IntPtr hwnd, string processName)
+    private void EmitFor(IntPtr hwnd, string processName, string appName, string title, string body)
     {
-        (string title, string body) = ExtractText(hwnd);
-
-        // Popups from HyperPet itself (the debug press-9 simulator) get a
-        // friendlier AppName so the messaging-rule auto-discovery does not
-        // pollute the user's list with the exe name.
-        bool isSelf = string.Equals(processName, _selfProcessName, StringComparison.OrdinalIgnoreCase);
-        string appName = isSelf ? "Sim" : processName;
 
         if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(body))
         {
@@ -337,7 +345,22 @@ public sealed class InAppNotificationWatcher : IDisposable
         Detected?.Invoke(this, notification);
     }
 
-    private static (string title, string body) ExtractText(IntPtr hwnd)
+    // Names returned by UI Automation for HWND-wrapper / platform host
+    // elements that show up before the actual user-visible text inside
+    // Chromium / Electron / WPF popups. These would otherwise be picked
+    // as title / body.
+    private static readonly HashSet<string> JunkAutomationNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Chrome Legacy Window",
+        "Intermediate D3D Window",
+        "MSCTFIME UI",
+        "Default IME",
+        "IME",
+        "GDI+ Window",
+        "CicMarshalWnd",
+    };
+
+    private static (string title, string body) ExtractText(IntPtr hwnd, string appName)
     {
         try
         {
@@ -350,9 +373,14 @@ public sealed class InAppNotificationWatcher : IDisposable
             var texts = new List<string>();
             CollectNames(root, TreeWalker.ControlViewWalker, texts);
 
+            // Strip platform host-element junk and the app name itself
+            // (e.g. "Zalo") so the first remaining names are the actual
+            // sender / message content the user wants to read.
             var deduped = texts
                 .Where(t => !string.IsNullOrWhiteSpace(t))
                 .Select(t => t.Trim())
+                .Where(t => !JunkAutomationNames.Contains(t))
+                .Where(t => !string.Equals(t, appName, StringComparison.OrdinalIgnoreCase))
                 .Distinct(StringComparer.Ordinal)
                 .Take(2)
                 .ToList();
