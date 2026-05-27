@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Input;
 using HyperPet.App.ViewModels;
 using HyperPet.Core.Notifications;
 using HyperPet.Core.Pets;
@@ -22,12 +23,14 @@ public partial class SettingsWindow : Window
 
         ShowFullContentCheckBox.IsChecked = settings.ShowFullNotificationContent;
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
-        OnlyMessagingAppsCheckBox.IsChecked = settings.ReactToMessagingApps;
         OpenAppOnBubbleClickCheckBox.IsChecked = settings.OpenAppOnBubbleClick;
         ReactToWindowsNotificationsCheckBox.IsChecked = settings.ReactToWindowsNotifications;
+        ReactToInAppNotificationsCheckBox.IsChecked = settings.ReactToInAppNotifications;
         DebugModeCheckBox.IsChecked = settings.DebugMode;
         PetBehaviorComboBox.SelectedIndex = settings.PetBehaviorMode == PetBehaviorMode.Desktop ? 1 : 0;
-        AlertDurationSlider.Value = settings.AlertDurationSeconds;
+        AlertDurationTextBox.Text = settings.AlertDurationSeconds.ToString();
+        WindowsPollIntervalTextBox.Text = settings.WindowsNotificationPollIntervalSeconds.ToString();
+        InAppPollIntervalTextBox.Text = settings.InAppNotificationPollIntervalSeconds.ToString();
 
         _messagingApps = new ObservableCollection<MessagingAppRuleViewModel>(
             settings.MessagingApps.Select(rule => new MessagingAppRuleViewModel(rule)));
@@ -68,6 +71,13 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private void OnNumericPreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        // Reject any keystroke that is not a digit so the bound TextBox can
+        // only contain a positive integer.
+        e.Handled = !int.TryParse(e.Text, out _);
+    }
+
     private void OnCloseClick(object sender, RoutedEventArgs e)
     {
         bool requestedStartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
@@ -75,15 +85,21 @@ public partial class SettingsWindow : Window
             ? PetBehaviorMode.Desktop
             : PetBehaviorMode.Calm;
 
+        int alertDuration = ParseOrDefault(AlertDurationTextBox.Text, _settings.AlertDurationSeconds);
+        int windowsInterval = ParseOrDefault(WindowsPollIntervalTextBox.Text, _settings.WindowsNotificationPollIntervalSeconds);
+        int inAppInterval = ParseOrDefault(InAppPollIntervalTextBox.Text, _settings.InAppNotificationPollIntervalSeconds);
+
         bool applied = SettingsWindowSettingsApplier.TryApply(
             _settings,
             ShowFullContentCheckBox.IsChecked == true,
             requestedPetBehaviorMode,
-            (int)Math.Round(AlertDurationSlider.Value),
+            alertDuration,
             requestedStartWithWindows,
-            reactToMessagingApps: OnlyMessagingAppsCheckBox.IsChecked == true,
             OpenAppOnBubbleClickCheckBox.IsChecked == true,
             ReactToWindowsNotificationsCheckBox.IsChecked == true,
+            ReactToInAppNotificationsCheckBox.IsChecked == true,
+            windowsInterval,
+            inAppInterval,
             DebugModeCheckBox.IsChecked == true,
             _messagingApps.Select(vm => vm.ToModel()).ToList(),
             _applyStartupSetting,
@@ -105,6 +121,11 @@ public partial class SettingsWindow : Window
 
         DialogResult = true;
         Close();
+    }
+
+    private static int ParseOrDefault(string? text, int fallback)
+    {
+        return int.TryParse(text, out var value) ? value : fallback;
     }
 
     private static List<string> ParsePatterns(string? input)

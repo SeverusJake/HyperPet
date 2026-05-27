@@ -72,17 +72,20 @@ public sealed class SettingsStore
             PetBehaviorMode = Enum.IsDefined(settings.PetBehaviorMode)
                 ? settings.PetBehaviorMode
                 : PetBehaviorMode.Calm,
-            AlertDurationSeconds = Math.Clamp(settings.AlertDurationSeconds, 3, 30),
+            AlertDurationSeconds = Math.Clamp(settings.AlertDurationSeconds, 1, 600),
             AlertsPaused = settings.AlertsPaused,
             ShowFullNotificationContent = settings.ShowFullNotificationContent,
             StartWithWindows = settings.StartWithWindows,
             PetLeft = settings.PetLeft,
             PetTop = settings.PetTop,
-            ReactToMessagingApps = settings.ReactToMessagingApps,
             OpenAppOnBubbleClick = settings.OpenAppOnBubbleClick,
             ReactToWindowsNotifications = settings.ReactToWindowsNotifications,
+            ReactToInAppNotifications = settings.ReactToInAppNotifications,
+            WindowsNotificationPollIntervalSeconds = Math.Clamp(settings.WindowsNotificationPollIntervalSeconds, 5, 600),
+            InAppNotificationPollIntervalSeconds = Math.Clamp(settings.InAppNotificationPollIntervalSeconds, 1, 60),
             DebugMode = settings.DebugMode,
-            MessagingApps = SanitizeMessagingApps(settings.MessagingApps)
+            MessagingApps = SanitizeMessagingApps(settings.MessagingApps),
+            WatchedInAppProcesses = settings.WatchedInAppProcesses?.ToList() ?? new List<string> { "Zalo" }
         };
     }
 

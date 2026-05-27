@@ -28,15 +28,12 @@ public sealed class PetController
             return null;
         }
 
-        var filter = _messagingAppFilter ?? new MessagingAppFilter(settings.MessagingApps);
-        bool isMessaging = filter.IsMessagingApp(notification);
-
-        if (isMessaging && !settings.ReactToMessagingApps)
-        {
-            return null;
-        }
-
-        if (!isMessaging && !settings.ReactToWindowsNotifications)
+        // Per-app block: if a rule's patterns match the notification AND the
+        // rule's Enabled flag is off, suppress. Source-level master gates
+        // (ReactToWindowsNotifications / ReactToInAppNotifications) are
+        // applied upstream by the dispatcher.
+        var matchedRule = FindMatchingRule(settings.MessagingApps, notification);
+        if (matchedRule is not null && !matchedRule.Enabled)
         {
             return null;
         }
@@ -62,5 +59,47 @@ public sealed class PetController
     {
         CurrentAlert = null;
         State = PetState.Idle;
+    }
+
+    private static MessagingAppRule? FindMatchingRule(IEnumerable<MessagingAppRule>? rules, HyperNotification notification)
+    {
+        if (rules is null)
+        {
+            return null;
+        }
+
+        foreach (var rule in rules)
+        {
+            if (rule is null)
+            {
+                continue;
+            }
+
+            foreach (var pattern in rule.MatchPatterns)
+            {
+                if (string.IsNullOrWhiteSpace(pattern))
+                {
+                    continue;
+                }
+
+                if (ContainsIgnoreCase(notification.AppName, pattern)
+                    || ContainsIgnoreCase(notification.AppUserModelId, pattern))
+                {
+                    return rule;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ContainsIgnoreCase(string source, string pattern)
+    {
+        if (string.IsNullOrEmpty(source))
+        {
+            return false;
+        }
+
+        return source.Contains(pattern, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using HyperPet.App.Notifications;
 using HyperPet.App.Pets;
 using HyperPet.App.Views;
 using HyperPet.Core.Diagnostics;
@@ -25,6 +26,7 @@ public partial class App : Application
     private DispatcherTimer? _monitorTimer;
     private bool _monitorIterationRunning;
     private INotificationListener? _notificationListener;
+    private InAppNotificationWatcher? _inAppWatcher;
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
     private HyperPetLogger? _logger;
 
@@ -70,7 +72,8 @@ public partial class App : Application
             appLauncher,
             SetPollInterval,
             PollSoon,
-            debugSimulator)
+            debugSimulator,
+            ApplyMonitoringSettings)
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
@@ -119,6 +122,7 @@ public partial class App : Application
     {
         _logger?.Info("Session exit requested");
         _monitorTimer?.Stop();
+        _inAppWatcher?.Dispose();
         _notificationListener?.StopListening();
         _shutdownCts.Cancel();
 
@@ -215,7 +219,7 @@ public partial class App : Application
                 _monitorTimer.Interval = _steadyPollInterval;
             }
 
-            if (!settings.ReactToMessagingApps && !settings.ReactToWindowsNotifications)
+            if (!settings.ReactToWindowsNotifications)
             {
                 _mainWindow?.ReportPollStatus("disabled");
                 return;
@@ -318,6 +322,11 @@ public partial class App : Application
         // Marshal to the UI/STA thread before processing.
         notificationListener.NotificationAdded += (_, notification) =>
         {
+            if (!settings.ReactToWindowsNotifications)
+            {
+                return;
+            }
+
             try
             {
                 Dispatcher.InvokeAsync(() =>
@@ -333,9 +342,10 @@ public partial class App : Application
         // Slow poll as fallback: catches notifications that arrived before
         // subscription and resyncs if NotificationChanged event is unsupported
         // (e.g., unpackaged desktop without background task registration).
+        _steadyPollInterval = TimeSpan.FromSeconds(Math.Max(5, settings.WindowsNotificationPollIntervalSeconds));
         _monitorTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = PollInterval
+            Interval = _steadyPollInterval
         };
         _monitorTimer.Tick += async (_, _) =>
             await MonitorNotificationsIterationAsync(
@@ -345,7 +355,7 @@ public partial class App : Application
                 settings);
         _monitorTimer.Start();
 
-        _mainWindow?.ConfigureDebugPolling(PollInterval);
+        _mainWindow?.ConfigureDebugPolling(_steadyPollInterval);
 
         // Kick off one immediate poll so we don't wait 30s for first sync.
         _ = MonitorNotificationsIterationAsync(
@@ -353,6 +363,72 @@ public partial class App : Application
             notificationDedupe,
             petController,
             settings);
+
+        StartInAppWatcher(notificationDedupe, petController, settings);
+    }
+
+    private void StartInAppWatcher(
+        NotificationDedupe notificationDedupe,
+        PetController petController,
+        HyperPetSettings settings)
+    {
+        if (_inAppWatcher is not null)
+        {
+            return;
+        }
+
+        // Always include the current process so the debug press-9 simulator
+        // (which spawns an in-process popup) round-trips through the same
+        // pipeline that catches real third-party popups like Zalo.
+        string ownProcessName = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+        var watchList = (settings.WatchedInAppProcesses ?? new List<string>())
+            .Concat(new[] { ownProcessName })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _inAppWatcher = new InAppNotificationWatcher(_logger);
+        _inAppWatcher.SetWatchList(watchList);
+        _inAppWatcher.SetInterval(TimeSpan.FromSeconds(Math.Max(1, settings.InAppNotificationPollIntervalSeconds)));
+
+        // Exclude HyperPet's own MainWindow from popup detection.
+        if (_mainWindow is not null)
+        {
+            void RegisterExclusion()
+            {
+                IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(_mainWindow).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    _inAppWatcher.ExcludeHandle(hwnd);
+                }
+            }
+
+            if (_mainWindow.IsLoaded)
+            {
+                RegisterExclusion();
+            }
+            else
+            {
+                _mainWindow.Loaded += (_, _) => RegisterExclusion();
+            }
+        }
+
+        _inAppWatcher.Detected += (_, notification) =>
+        {
+            if (!settings.ReactToInAppNotifications)
+            {
+                return;
+            }
+
+            try
+            {
+                DispatchIfNew(notification, notificationDedupe, petController, settings);
+            }
+            catch (Exception exception)
+            {
+                _logger?.Error("In-app watcher dispatch failed", exception);
+            }
+        };
+        _inAppWatcher.Start();
     }
 
     private static async Task<SpritePet?> TryLoadSpritePetAsync(HyperPetLogger logger)
@@ -387,6 +463,23 @@ public partial class App : Application
 
     private TimeSpan _steadyPollInterval = PollInterval;
     private bool _pollSoonPending;
+
+    private void ApplyMonitoringSettings()
+    {
+        if (_settings is null)
+        {
+            return;
+        }
+
+        var winInterval = TimeSpan.FromSeconds(Math.Max(5, _settings.WindowsNotificationPollIntervalSeconds));
+        SetPollInterval(winInterval);
+        _mainWindow?.ConfigureDebugPolling(winInterval);
+
+        var inAppInterval = TimeSpan.FromSeconds(Math.Max(1, _settings.InAppNotificationPollIntervalSeconds));
+        _inAppWatcher?.SetInterval(inAppInterval);
+
+        _logger?.Info($"Applied monitoring intervals: win={winInterval.TotalSeconds}s inApp={inAppInterval.TotalSeconds}s");
+    }
 
     private void SetPollInterval(TimeSpan interval)
     {

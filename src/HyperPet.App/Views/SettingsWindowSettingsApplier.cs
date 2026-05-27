@@ -12,9 +12,11 @@ public static class SettingsWindowSettingsApplier
         PetBehaviorMode petBehaviorMode,
         int alertDurationSeconds,
         bool startWithWindows,
-        bool reactToMessagingApps,
         bool openAppOnBubbleClick,
         bool reactToWindowsNotifications,
+        bool reactToInAppNotifications,
+        int windowsPollIntervalSeconds,
+        int inAppPollIntervalSeconds,
         bool debugMode,
         IReadOnlyList<MessagingAppRule> messagingApps,
         Action<bool> applyStartupSetting,
@@ -39,11 +41,13 @@ public static class SettingsWindowSettingsApplier
 
         settings.ShowFullNotificationContent = showFullNotificationContent;
         settings.PetBehaviorMode = petBehaviorMode;
-        settings.AlertDurationSeconds = alertDurationSeconds;
+        settings.AlertDurationSeconds = Math.Clamp(alertDurationSeconds, 1, 600);
         settings.StartWithWindows = startWithWindows;
-        settings.ReactToMessagingApps = reactToMessagingApps;
         settings.OpenAppOnBubbleClick = openAppOnBubbleClick;
         settings.ReactToWindowsNotifications = reactToWindowsNotifications;
+        settings.ReactToInAppNotifications = reactToInAppNotifications;
+        settings.WindowsNotificationPollIntervalSeconds = Math.Clamp(windowsPollIntervalSeconds, 5, 600);
+        settings.InAppNotificationPollIntervalSeconds = Math.Clamp(inAppPollIntervalSeconds, 1, 60);
         settings.DebugMode = debugMode;
         settings.MessagingApps = messagingApps?.ToList() ?? MessagingAppRule.CreateDefaults().ToList();
 

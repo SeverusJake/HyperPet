@@ -7,6 +7,7 @@ using HyperPet.App.ViewModels;
 using HyperPet.Core.Pet;
 using HyperPet.Core.Pets;
 using HyperPet.App.Views;
+using HyperPet.App.Notifications;
 using HyperPet.Windows.Notifications;
 using HyperPet.Windows.Startup;
 
@@ -21,6 +22,7 @@ public partial class MainWindow : Window
     private readonly Action<TimeSpan>? _setPollInterval;
     private readonly Action<TimeSpan>? _pollSoon;
     private readonly DebugNotificationSimulator? _debugSimulator;
+    private readonly Action? _applyMonitoringSettings;
     private readonly IAppLauncher? _appLauncher;
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
@@ -45,7 +47,8 @@ public partial class MainWindow : Window
         IAppLauncher? appLauncher = null,
         Action<TimeSpan>? setPollInterval = null,
         Action<TimeSpan>? pollSoon = null,
-        DebugNotificationSimulator? debugSimulator = null)
+        DebugNotificationSimulator? debugSimulator = null,
+        Action? applyMonitoringSettings = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -54,6 +57,7 @@ public partial class MainWindow : Window
         _setPollInterval = setPollInterval;
         _pollSoon = pollSoon;
         _debugSimulator = debugSimulator;
+        _applyMonitoringSettings = applyMonitoringSettings;
 
         InitializeComponent();
 
@@ -306,6 +310,7 @@ public partial class MainWindow : Window
             _saveSettings();
             StartBehaviorMode();
             ApplyDebugOverlayVisibility();
+            _applyMonitoringSettings?.Invoke();
         }
     }
 
@@ -414,6 +419,30 @@ public partial class MainWindow : Window
 
     private void TrySimulateNotification(bool messaging)
     {
+        if (messaging)
+        {
+            // Press 9: spawn an in-process popup mimicking a Zalo-style toast
+            // (small, topmost, no taskbar entry). The InAppNotificationWatcher
+            // detects it the same way it detects real Zalo popups. This bypasses
+            // the Windows toast pipeline entirely, so the OS does not show a
+            // notification of its own.
+            try
+            {
+                var popup = new DebugSimulatedPopupWindow(
+                    sender: "Sky Breaking Master",
+                    preview: "Where are you, my disciple?",
+                    autoDismissAfter: TimeSpan.FromSeconds(5));
+                popup.Show();
+                ReportPollStatus("sim:inapp popup");
+            }
+            catch (Exception exception)
+            {
+                ReportPollStatus($"sim error: {exception.GetType().Name}");
+            }
+            return;
+        }
+
+        // Press 0: emit a real Windows toast under the generic debug AUMI.
         if (_debugSimulator is null)
         {
             ReportPollStatus("sim N/A");
@@ -422,16 +451,8 @@ public partial class MainWindow : Window
 
         try
         {
-            if (messaging)
-            {
-                _debugSimulator.SimulateMessagingNotification();
-                ReportPollStatus("sim:msg sent");
-            }
-            else
-            {
-                _debugSimulator.SimulateGenericNotification();
-                ReportPollStatus("sim:generic sent");
-            }
+            _debugSimulator.SimulateGenericNotification();
+            ReportPollStatus("sim:generic sent");
         }
         catch (Exception exception)
         {

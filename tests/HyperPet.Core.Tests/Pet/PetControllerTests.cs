@@ -53,48 +53,24 @@ public sealed class PetControllerTests
     }
 
     [Fact]
-    public void HandleNotification_WhenOnlyMessagingCategoryOn_FiltersOutNonMessaging()
+    public void HandleNotification_WhenMatchingAppRuleDisabled_FiltersOut()
     {
         var controller = new PetController();
         var settings = HyperPetSettings.CreateDefault();
-        settings.ReactToMessagingApps = true;
-        settings.ReactToWindowsNotifications = false;
+        var discordRule = settings.MessagingApps.First(r => r.DisplayName == "Discord");
+        discordRule.Enabled = false;
 
-        var notification = new HyperNotification(
-            "outlook-1",
-            "Outlook",
-            "Boss",
-            "ping",
-            DateTimeOffset.UtcNow,
-            canActivate: false,
-            appUserModelId: "Microsoft.Office.OUTLOOK");
-
-        var alert = controller.HandleNotification(notification, settings);
+        var alert = controller.HandleNotification(CreateNotification(), settings);
 
         Assert.Null(alert);
         Assert.Equal(PetState.Idle, controller.State);
     }
 
     [Fact]
-    public void HandleNotification_WhenOnlyMessagingCategoryOn_AllowsMatchingApp()
+    public void HandleNotification_WhenAppNotInList_StillAllowed()
     {
         var controller = new PetController();
         var settings = HyperPetSettings.CreateDefault();
-        settings.ReactToMessagingApps = true;
-        settings.ReactToWindowsNotifications = false;
-
-        var alert = controller.HandleNotification(CreateNotification(), settings);
-
-        Assert.NotNull(alert);
-    }
-
-    [Fact]
-    public void HandleNotification_WhenBothCategoriesOn_AllowsAnyApp()
-    {
-        var controller = new PetController();
-        var settings = HyperPetSettings.CreateDefault();
-        settings.ReactToMessagingApps = true;
-        settings.ReactToWindowsNotifications = true;
 
         var notification = new HyperNotification(
             "outlook-1",
@@ -111,30 +87,14 @@ public sealed class PetControllerTests
     }
 
     [Fact]
-    public void HandleNotification_WhenOnlyWindowsCategoryOn_FiltersOutMessaging()
+    public void HandleNotification_WhenMatchingAppRuleEnabled_Allowed()
     {
         var controller = new PetController();
         var settings = HyperPetSettings.CreateDefault();
-        settings.ReactToMessagingApps = false;
-        settings.ReactToWindowsNotifications = true;
 
         var alert = controller.HandleNotification(CreateNotification(), settings);
 
-        Assert.Null(alert);
-        Assert.Equal(PetState.Idle, controller.State);
-    }
-
-    [Fact]
-    public void HandleNotification_WhenBothCategoriesOff_FiltersEverything()
-    {
-        var controller = new PetController();
-        var settings = HyperPetSettings.CreateDefault();
-        settings.ReactToMessagingApps = false;
-        settings.ReactToWindowsNotifications = false;
-
-        var alert = controller.HandleNotification(CreateNotification(), settings);
-
-        Assert.Null(alert);
+        Assert.NotNull(alert);
     }
 
     [Fact]

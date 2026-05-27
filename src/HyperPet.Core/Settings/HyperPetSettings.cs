@@ -15,26 +15,31 @@ public sealed class HyperPetSettings
     public double PetTop { get; set; } = 80;
 
     /// <summary>
-    /// When true, the pet reacts to notifications from apps matching one of
-    /// the rules in <see cref="MessagingApps"/>. Combine with
-    /// <see cref="ReactToWindowsNotifications"/> to control the other category.
-    /// </summary>
-    public bool ReactToMessagingApps { get; set; } = true;
-
-    /// <summary>
     /// When true, single-clicking the speech bubble launches the source
     /// messaging app (when its AppUserModelId is known).
     /// </summary>
     public bool OpenAppOnBubbleClick { get; set; }
 
     /// <summary>
-    /// When true, the pet reacts to notifications from apps that do NOT match
-    /// any rule in <see cref="MessagingApps"/> (i.e., generic Windows toasts
-    /// like system updates, browser site notifications, calendar reminders,
-    /// game alerts, etc.). Combine with <see cref="ReactToMessagingApps"/> to
-    /// control the messaging category.
+    /// Master toggle for the Windows Action Center polling pipeline. When
+    /// true, every notification from that pipeline is considered (subject to
+    /// per-app blocks in <see cref="MessagingApps"/>). When false, no Windows
+    /// Action Center notification triggers the pet.
     /// </summary>
     public bool ReactToWindowsNotifications { get; set; } = true;
+
+    /// <summary>
+    /// Master toggle for the in-app popup watcher (apps like Zalo that do not
+    /// route through the Windows Action Center). When true, popups from
+    /// processes listed in <see cref="WatchedInAppProcesses"/> are caught.
+    /// </summary>
+    public bool ReactToInAppNotifications { get; set; } = true;
+
+    /// <summary>Poll interval (seconds) for the Windows Action Center pipeline.</summary>
+    public int WindowsNotificationPollIntervalSeconds { get; set; } = 30;
+
+    /// <summary>Poll interval (seconds) for the in-app popup watcher.</summary>
+    public int InAppNotificationPollIntervalSeconds { get; set; } = 2;
 
     /// <summary>
     /// When true, the pet window shows a small debug overlay with the next
@@ -45,6 +50,13 @@ public sealed class HyperPetSettings
     public bool DebugMode { get; set; }
 
     public List<MessagingAppRule> MessagingApps { get; set; } = MessagingAppRule.CreateDefaults().ToList();
+
+    /// <summary>
+    /// Process names (no extension) whose top-level popup windows are watched
+    /// as in-app notifications. Used for apps like Zalo that do not push
+    /// toasts into the Windows Action Center.
+    /// </summary>
+    public List<string> WatchedInAppProcesses { get; set; } = new() { "Zalo" };
 
     public static HyperPetSettings CreateDefault() => new();
 }

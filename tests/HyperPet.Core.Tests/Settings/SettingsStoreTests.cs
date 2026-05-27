@@ -22,7 +22,10 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.False(settings.AlertsPaused);
         Assert.True(settings.ShowFullNotificationContent);
         Assert.False(settings.StartWithWindows);
-        Assert.True(settings.ReactToMessagingApps);
+        Assert.True(settings.ReactToWindowsNotifications);
+        Assert.True(settings.ReactToInAppNotifications);
+        Assert.Equal(30, settings.WindowsNotificationPollIntervalSeconds);
+        Assert.Equal(2, settings.InAppNotificationPollIntervalSeconds);
         Assert.False(settings.OpenAppOnBubbleClick);
         Assert.Equal(3, settings.MessagingApps.Count);
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Discord");
@@ -46,7 +49,10 @@ public sealed class SettingsStoreTests : IDisposable
             StartWithWindows = true,
             PetLeft = 140,
             PetTop = 220,
-            ReactToMessagingApps = false,
+            ReactToWindowsNotifications = false,
+            ReactToInAppNotifications = false,
+            WindowsNotificationPollIntervalSeconds = 15,
+            InAppNotificationPollIntervalSeconds = 5,
             OpenAppOnBubbleClick = true,
             MessagingApps = new List<MessagingAppRule>
             {
@@ -66,7 +72,10 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(expected.StartWithWindows, actual.StartWithWindows);
         Assert.Equal(expected.PetLeft, actual.PetLeft);
         Assert.Equal(expected.PetTop, actual.PetTop);
-        Assert.False(actual.ReactToMessagingApps);
+        Assert.False(actual.ReactToWindowsNotifications);
+        Assert.False(actual.ReactToInAppNotifications);
+        Assert.Equal(15, actual.WindowsNotificationPollIntervalSeconds);
+        Assert.Equal(5, actual.InAppNotificationPollIntervalSeconds);
         Assert.True(actual.OpenAppOnBubbleClick);
         Assert.Equal(2, actual.MessagingApps.Count);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Telegram" && app.Enabled);
@@ -132,8 +141,8 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Theory]
-    [InlineData("", 2, "miku-kimono", 3)]
-    [InlineData("  ", 31, "miku-kimono", 30)]
+    [InlineData("", 0, "miku-kimono", 1)]
+    [InlineData("  ", 601, "miku-kimono", 600)]
     public async Task SaveAsync_WhenSettingsNeedSanitizing_SavesSanitizedCopyWithoutMutatingOriginal(
         string selectedPet,
         int alertDurationSeconds,

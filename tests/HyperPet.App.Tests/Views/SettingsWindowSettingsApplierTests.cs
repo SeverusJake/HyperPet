@@ -16,8 +16,11 @@ public sealed class SettingsWindowSettingsApplierTests
             StartWithWindows = false,
             PetBehaviorMode = PetBehaviorMode.Calm,
             AlertDurationSeconds = 8,
-            ReactToMessagingApps = true,
-            OpenAppOnBubbleClick = false
+            OpenAppOnBubbleClick = false,
+            ReactToWindowsNotifications = true,
+            ReactToInAppNotifications = true,
+            WindowsNotificationPollIntervalSeconds = 30,
+            InAppNotificationPollIntervalSeconds = 2
         };
         string? warning = null;
 
@@ -27,9 +30,11 @@ public sealed class SettingsWindowSettingsApplierTests
             petBehaviorMode: PetBehaviorMode.Desktop,
             alertDurationSeconds: 20,
             startWithWindows: true,
-            reactToMessagingApps: false,
             openAppOnBubbleClick: true,
-            reactToWindowsNotifications: true,
+            reactToWindowsNotifications: false,
+            reactToInAppNotifications: false,
+            windowsPollIntervalSeconds: 15,
+            inAppPollIntervalSeconds: 5,
             debugMode: false,
             messagingApps: new List<MessagingAppRule>
             {
@@ -43,7 +48,10 @@ public sealed class SettingsWindowSettingsApplierTests
         Assert.False(settings.StartWithWindows);
         Assert.Equal(PetBehaviorMode.Calm, settings.PetBehaviorMode);
         Assert.Equal(8, settings.AlertDurationSeconds);
-        Assert.True(settings.ReactToMessagingApps);
+        Assert.True(settings.ReactToWindowsNotifications);
+        Assert.True(settings.ReactToInAppNotifications);
+        Assert.Equal(30, settings.WindowsNotificationPollIntervalSeconds);
+        Assert.Equal(2, settings.InAppNotificationPollIntervalSeconds);
         Assert.False(settings.OpenAppOnBubbleClick);
         Assert.Contains("Startup was left unchanged", warning);
     }
@@ -57,8 +65,11 @@ public sealed class SettingsWindowSettingsApplierTests
             StartWithWindows = false,
             PetBehaviorMode = PetBehaviorMode.Calm,
             AlertDurationSeconds = 8,
-            ReactToMessagingApps = false,
-            OpenAppOnBubbleClick = false
+            OpenAppOnBubbleClick = false,
+            ReactToWindowsNotifications = true,
+            ReactToInAppNotifications = true,
+            WindowsNotificationPollIntervalSeconds = 30,
+            InAppNotificationPollIntervalSeconds = 2
         };
         bool? appliedStartup = null;
 
@@ -74,9 +85,11 @@ public sealed class SettingsWindowSettingsApplierTests
             petBehaviorMode: PetBehaviorMode.Desktop,
             alertDurationSeconds: 20,
             startWithWindows: true,
-            reactToMessagingApps: true,
             openAppOnBubbleClick: true,
-            reactToWindowsNotifications: true,
+            reactToWindowsNotifications: false,
+            reactToInAppNotifications: false,
+            windowsPollIntervalSeconds: 45,
+            inAppPollIntervalSeconds: 4,
             debugMode: true,
             messagingApps: newApps,
             applyStartupSetting: value => appliedStartup = value,
@@ -88,12 +101,13 @@ public sealed class SettingsWindowSettingsApplierTests
         Assert.True(settings.StartWithWindows);
         Assert.Equal(PetBehaviorMode.Desktop, settings.PetBehaviorMode);
         Assert.Equal(20, settings.AlertDurationSeconds);
-        Assert.True(settings.ReactToMessagingApps);
         Assert.True(settings.OpenAppOnBubbleClick);
-        Assert.True(settings.ReactToWindowsNotifications);
+        Assert.False(settings.ReactToWindowsNotifications);
+        Assert.False(settings.ReactToInAppNotifications);
+        Assert.Equal(45, settings.WindowsNotificationPollIntervalSeconds);
+        Assert.Equal(4, settings.InAppNotificationPollIntervalSeconds);
         Assert.True(settings.DebugMode);
         Assert.Equal(2, settings.MessagingApps.Count);
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Telegram");
     }
 }
-
