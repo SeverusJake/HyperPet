@@ -18,12 +18,33 @@ public sealed class InAppNotificationWatcher : IDisposable
 {
     private const int GWL_EXSTYLE = -20;
     private const long WS_EX_TOPMOST = 0x00000008;
+    private const long WS_EX_TRANSPARENT = 0x00000020;
     private const long WS_EX_APPWINDOW = 0x00040000;
     private const long WS_EX_TOOLWINDOW = 0x00000080;
+    private const long WS_EX_NOACTIVATE = 0x08000000;
 
-    private const int MaxPopupWidth = 600;
-    private const int MaxPopupHeight = 320;
+    private const int MinPopupWidth = 180;
+    private const int MinPopupHeight = 48;
+    private const int MaxPopupWidth = 700;
+    private const int MaxPopupHeight = 260;
     private const int MaxTextNodes = 64;
+
+    // Tooltip / popup-menu / fly-out window classes that masquerade as small
+    // topmost popups but are not actual notifications.
+    private static readonly string[] TooltipClassExactDenylist = new[]
+    {
+        "tooltips_class32",
+        "#32768",                 // Win32 popup menu
+        "QTip",                   // legacy Qt tooltip
+        "MSO_BORDEREFFECT_WINDOW",
+    };
+    private static readonly string[] TooltipClassSubstringDenylist = new[]
+    {
+        "tooltip",                // generic
+        "qtooltip",
+        "popuphost",              // WinUI/WPF Popup
+        "hwndwrapper[popup",      // WPF popup
+    };
 
     private readonly DispatcherTimer _timer;
     private readonly HyperPetLogger? _logger;
@@ -137,6 +158,15 @@ public sealed class InAppNotificationWatcher : IDisposable
                     return true;
                 }
 
+                // WPF/Win32 context menus, tooltips and popups created by
+                // HyperPet itself report their owner as MainWindow. If the
+                // root owner is excluded, skip the child popup too.
+                IntPtr rootOwner = GetAncestor(hwnd, GA_ROOTOWNER);
+                if (rootOwner != IntPtr.Zero && _excludedHandles.Contains(rootOwner))
+                {
+                    return true;
+                }
+
                 liveHandles.Add(hwnd);
 
                 if (_seenHandles.Contains(hwnd))
@@ -196,7 +226,7 @@ public sealed class InAppNotificationWatcher : IDisposable
 
         int width = rect.Right - rect.Left;
         int height = rect.Bottom - rect.Top;
-        if (width <= 0 || height <= 0)
+        if (width < MinPopupWidth || height < MinPopupHeight)
         {
             return false;
         }
@@ -206,17 +236,70 @@ public sealed class InAppNotificationWatcher : IDisposable
             return false;
         }
 
+        string className = GetWindowClassNameSafe(hwnd);
+        if (IsTooltipLikeClass(className))
+        {
+            return false;
+        }
+
         long exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+
+        // Click-through windows (tooltips, hover hints) carry WS_EX_TRANSPARENT.
+        // Real notifications need pointer input to dismiss / click.
+        if ((exStyle & WS_EX_TRANSPARENT) != 0)
+        {
+            return false;
+        }
+
         bool hasAppWindow = (exStyle & WS_EX_APPWINDOW) != 0;
         bool hasToolWindow = (exStyle & WS_EX_TOOLWINDOW) != 0;
-        bool isTopmost = (exStyle & WS_EX_TOPMOST) != 0;
 
+        // Skip main app windows that show in the taskbar (Zalo's primary
+        // window). A tool window is fine (no taskbar entry).
         if (hasAppWindow && !hasToolWindow)
         {
             return false;
         }
 
-        return isTopmost;
+        // Real Zalo notifications are not strictly WS_EX_TOPMOST; some are
+        // raised via SetWindowPos with HWND_TOPMOST without the style bit
+        // sticking. Accept either topmost OR no-activate (typical popup hint).
+        bool isTopmost = (exStyle & WS_EX_TOPMOST) != 0;
+        bool isNoActivate = (exStyle & WS_EX_NOACTIVATE) != 0;
+        return isTopmost || isNoActivate || hasToolWindow;
+    }
+
+    private static bool IsTooltipLikeClass(string className)
+    {
+        if (string.IsNullOrEmpty(className))
+        {
+            return false;
+        }
+
+        foreach (var exact in TooltipClassExactDenylist)
+        {
+            if (string.Equals(className, exact, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        foreach (var sub in TooltipClassSubstringDenylist)
+        {
+            if (className.IndexOf(sub, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string GetWindowClassNameSafe(IntPtr hwnd)
+    {
+        var buffer = new System.Text.StringBuilder(256);
+        int len = GetClassName(hwnd, buffer, buffer.Capacity);
+        return len > 0 ? buffer.ToString() : string.Empty;
     }
 
     private void EmitFor(IntPtr hwnd, string processName)
@@ -360,6 +443,14 @@ public sealed class InAppNotificationWatcher : IDisposable
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int nIndex);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetClassName(IntPtr hwnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+
+    private const uint GA_ROOTOWNER = 3;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT

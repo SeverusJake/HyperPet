@@ -434,6 +434,16 @@ public partial class MainWindow : Window
         }
 
         TimeSpan remaining = _debugNextPollUtc - DateTime.UtcNow;
+
+        // When the countdown reaches zero but no poll arrives (monitor paused,
+        // disabled, or stalled), wrap to the next interval so the overlay
+        // visibly recounts instead of being stuck at 0s forever.
+        if (remaining <= TimeSpan.Zero)
+        {
+            _debugNextPollUtc = DateTime.UtcNow + _debugPollInterval;
+            remaining = _debugPollInterval;
+        }
+
         int seconds = Math.Max(0, (int)Math.Ceiling(remaining.TotalSeconds));
 
         DebugOverlayText.Text =

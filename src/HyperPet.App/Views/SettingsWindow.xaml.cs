@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using HyperPet.App.ViewModels;
 using HyperPet.Core.Notifications;
@@ -14,6 +17,12 @@ public partial class SettingsWindow : Window
     private readonly Action<bool> _applyStartupSetting;
     private readonly Action? _applySettings;
     private readonly ObservableCollection<MessagingAppRuleViewModel> _messagingApps;
+    private bool _initializing = true;
+    private bool _dirty;
+    // Sticky: flips true on first user edit, never goes false again for the
+    // lifetime of this dialog. Drives the Save button so Save stays clickable
+    // even after Apply commits the current pending edits.
+    private bool _anyEditMade;
 
     public SettingsWindow(
         HyperPetSettings settings,
@@ -41,6 +50,100 @@ public partial class SettingsWindow : Window
         _messagingApps = new ObservableCollection<MessagingAppRuleViewModel>(
             settings.MessagingApps.Select(rule => new MessagingAppRuleViewModel(rule)));
         MessagingAppsListBox.ItemsSource = _messagingApps;
+
+        WireDirtyTracking();
+        UpdateButtonState();
+
+        // ListBox item containers materialize during the first layout pass and
+        // their TwoWay {Binding Enabled, UpdateSourceTrigger=PropertyChanged}
+        // writes back to the source on attach, firing PropertyChanged. That
+        // would flip _dirty before the user ever touches a control. Defer the
+        // flag flip past idle so those binding initializations are absorbed.
+        Loaded += OnLoadedClearInitializing;
+    }
+
+    private void OnLoadedClearInitializing(object? sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedClearInitializing;
+        Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                _initializing = false;
+                _dirty = false;
+                _anyEditMade = false;
+                UpdateButtonState();
+            }),
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+    }
+
+    private void WireDirtyTracking()
+    {
+        ShowFullContentCheckBox.Click += OnAnyChange;
+        StartWithWindowsCheckBox.Click += OnAnyChange;
+        OpenAppOnBubbleClickCheckBox.Click += OnAnyChange;
+        ReactToWindowsNotificationsCheckBox.Click += OnAnyChange;
+        ReactToInAppNotificationsCheckBox.Click += OnAnyChange;
+        DebugModeCheckBox.Click += OnAnyChange;
+
+        PetBehaviorComboBox.SelectionChanged += OnAnyChange;
+
+        AlertDurationTextBox.TextChanged += OnAnyChange;
+        WindowsPollIntervalTextBox.TextChanged += OnAnyChange;
+        InAppPollIntervalTextBox.TextChanged += OnAnyChange;
+        PetSizeTextBox.TextChanged += OnAnyChange;
+
+        _messagingApps.CollectionChanged += OnMessagingAppsCollectionChanged;
+        foreach (var vm in _messagingApps)
+        {
+            vm.PropertyChanged += OnMessagingAppRulePropertyChanged;
+        }
+    }
+
+    private void OnAnyChange(object? sender, EventArgs e) => MarkDirty();
+
+    private void OnMessagingAppRulePropertyChanged(object? sender, PropertyChangedEventArgs e) => MarkDirty();
+
+    private void OnMessagingAppsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is not null)
+        {
+            foreach (MessagingAppRuleViewModel vm in e.NewItems)
+            {
+                vm.PropertyChanged += OnMessagingAppRulePropertyChanged;
+            }
+        }
+
+        if (e.OldItems is not null)
+        {
+            foreach (MessagingAppRuleViewModel vm in e.OldItems)
+            {
+                vm.PropertyChanged -= OnMessagingAppRulePropertyChanged;
+            }
+        }
+
+        MarkDirty();
+    }
+
+    private void MarkDirty()
+    {
+        if (_initializing)
+        {
+            return;
+        }
+
+        _dirty = true;
+        _anyEditMade = true;
+        UpdateButtonState();
+    }
+
+    private void UpdateButtonState()
+    {
+        // Save: sticky-enabled after the first edit. Apply commits doesn't
+        // disable Save so the user can still close-with-save in one click.
+        // Apply: gated on current pending edits; disables after a successful
+        // commit until the user edits again.
+        SaveButton.IsEnabled = _anyEditMade;
+        ApplyButton.IsEnabled = _dirty;
     }
 
     private void OnAddMessagingAppClick(object sender, RoutedEventArgs e)
@@ -128,6 +231,8 @@ public partial class SettingsWindow : Window
         }
 
         _applySettings?.Invoke();
+        _dirty = false;
+        UpdateButtonState();
         return true;
     }
 

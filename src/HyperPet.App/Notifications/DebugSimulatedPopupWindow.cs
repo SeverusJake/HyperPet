@@ -26,9 +26,10 @@ public sealed class DebugSimulatedPopupWindow : Window
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.Manual;
 
+        // Bottom-right of work area to mimic Zalo's real notification position.
         Rect workArea = SystemParameters.WorkArea;
         Left = workArea.Right - Width - 20;
-        Top = workArea.Top + 20;
+        Top = workArea.Bottom - Height - 20;
 
         Content = BuildContent(sender, preview);
 
