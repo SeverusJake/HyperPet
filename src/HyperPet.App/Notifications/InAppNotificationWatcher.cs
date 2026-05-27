@@ -48,6 +48,7 @@ public sealed class InAppNotificationWatcher : IDisposable
 
     private readonly DispatcherTimer _timer;
     private readonly HyperPetLogger? _logger;
+    private readonly ChromiumAccessibilityActivator _activator;
     // hwnd -> last emitted content hash. Real Zalo / Electron popups often
     // reuse the same HWND for successive messages (text swapped in-place);
     // keying off handle alone would suppress every message after the first.
@@ -61,6 +62,7 @@ public sealed class InAppNotificationWatcher : IDisposable
     public InAppNotificationWatcher(HyperPetLogger? logger = null)
     {
         _logger = logger;
+        _activator = new ChromiumAccessibilityActivator(logger);
         _timer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(2)
@@ -107,6 +109,11 @@ public sealed class InAppNotificationWatcher : IDisposable
             return;
         }
 
+        // Pre-activate now so the first scan sees a populated Chromium
+        // accessibility tree instead of host-element junk. Discard the
+        // result; the side effect (UIA subscription) is what we want.
+        _ = ResolveWatchedPids();
+
         _timer.Start();
     }
 
@@ -115,6 +122,7 @@ public sealed class InAppNotificationWatcher : IDisposable
     public void Dispose()
     {
         Stop();
+        _activator.Dispose();
         _seenHandles.Clear();
     }
 
@@ -228,6 +236,15 @@ public sealed class InAppNotificationWatcher : IDisposable
                 _logger?.Warn($"InAppNotificationWatcher: lookup failed for '{name}'", exception);
             }
         }
+
+        // Wake Chromium UIA tree on each watched process, and drop entries
+        // whose pid is no longer alive (Zalo restart, etc.).
+        foreach (var pid in result.Keys)
+        {
+            _activator.EnsureActivated(pid);
+        }
+
+        _activator.PruneStale(result.Keys);
 
         return result;
     }
