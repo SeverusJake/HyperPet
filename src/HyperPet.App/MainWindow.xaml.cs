@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
+using HyperPet.App.Pets.Roaming;
 using HyperPet.App.Pets;
 using HyperPet.Core.Settings;
 using HyperPet.App.ViewModels;
@@ -34,6 +36,8 @@ public partial class MainWindow : Window
     private readonly Random _random = new();
     private readonly PetAnimator? _petAnimator;
     private readonly SpritePet? _spritePet;
+    private DesktopRoamController? _roamController;
+    private string _lastRoamAnimation = string.Empty;
     private readonly IReadOnlyDictionary<string, int>? _originalStateFps;
     private readonly IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
     private bool _movingRight = true;
@@ -169,6 +173,9 @@ public partial class MainWindow : Window
             case PetBehaviorMode.Running:
                 StartRunningMode();
                 return;
+            case PetBehaviorMode.Desktop:
+                StartPerchMode();
+                return;
             default:
                 StartCalmMode();
                 return;
@@ -203,6 +210,31 @@ public partial class MainWindow : Window
         _movementTimer.Start();
     }
 
+    private void StartPerchMode()
+    {
+        _calmTimer.Stop();
+
+        if (_spritePet is null)
+        {
+            return;
+        }
+
+        if (_roamController is null)
+        {
+            IntPtr hwnd = new WindowInteropHelper(this).EnsureHandle();
+            _roamController = new DesktopRoamController(new WindowLedgeProvider(hwnd), _random);
+        }
+
+        _roamController.PetWidth = GetWindowWidth();
+        _roamController.PetHeight = GetWindowHeight();
+        _roamController.WalkSpeed = Math.Clamp(_settings.RunningSpeed, 1, 20);
+        _roamController.Start(Left, Top);
+        _lastRoamAnimation = string.Empty;
+
+        _movementTimer.Interval = TimeSpan.FromMilliseconds(33);
+        _movementTimer.Start();
+    }
+
     private void StopBehaviorTimers()
     {
         _calmTimer.Stop();
@@ -216,6 +248,12 @@ public partial class MainWindow : Window
 
     private void OnMovementTimerTick(object? sender, EventArgs e)
     {
+        if (_settings.PetBehaviorMode == PetBehaviorMode.Desktop)
+        {
+            RoamTick();
+            return;
+        }
+
         Rect workArea = SystemParameters.WorkArea;
         double windowWidth = GetWindowWidth();
         int speed = Math.Clamp(_settings.RunningSpeed, 1, 20);
@@ -233,6 +271,24 @@ public partial class MainWindow : Window
         }
 
         Left = nextLeft;
+    }
+
+    private void RoamTick()
+    {
+        if (_roamController is null)
+        {
+            return;
+        }
+
+        _roamController.Tick();
+        Left = _roamController.X;
+        Top = _roamController.Y;
+
+        if (_roamController.CurrentAnimation != _lastRoamAnimation)
+        {
+            _lastRoamAnimation = _roamController.CurrentAnimation;
+            _petAnimator?.Play(_lastRoamAnimation);
+        }
     }
 
     private double GetWindowWidth()
