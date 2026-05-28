@@ -18,6 +18,9 @@
     <Grid MouseLeftButtonDown="OnMouseLeftButtonDown">
         <Grid.ContextMenu>
             <ContextMenu>
+                <MenuItem x:Name="VersionMenuItem"
+                          IsEnabled="False" />
+                <Separator />
                 <MenuItem x:Name="PauseAlertsMenuItem"
                           Header="Pause alerts"
                           IsCheckable="True"

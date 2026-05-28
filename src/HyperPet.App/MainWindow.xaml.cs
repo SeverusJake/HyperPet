@@ -70,6 +70,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         PauseAlertsMenuItem.IsChecked = settings.AlertsPaused;
+        VersionMenuItem.Header = AppVersion.DisplayString;
 
         _viewModel = new MainWindowViewModel
         {
