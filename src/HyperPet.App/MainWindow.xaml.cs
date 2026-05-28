@@ -8,8 +8,10 @@ using HyperPet.Core.Pet;
 using HyperPet.Core.Pets;
 using HyperPet.App.Views;
 using HyperPet.App.Notifications;
+using HyperPet.App.Update;
 using HyperPet.Windows.Notifications;
 using HyperPet.Windows.Startup;
+using Velopack;
 
 namespace HyperPet.App;
 
@@ -23,6 +25,7 @@ public partial class MainWindow : Window
     private readonly Action<TimeSpan>? _pollSoon;
     private readonly DebugNotificationSimulator? _debugSimulator;
     private readonly Action? _applyMonitoringSettings;
+    private readonly UpdateService? _updateService;
     private readonly IAppLauncher? _appLauncher;
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
@@ -53,7 +56,8 @@ public partial class MainWindow : Window
         Action<TimeSpan>? setPollInterval = null,
         Action<TimeSpan>? pollSoon = null,
         DebugNotificationSimulator? debugSimulator = null,
-        Action? applyMonitoringSettings = null)
+        Action? applyMonitoringSettings = null,
+        UpdateService? updateService = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -66,6 +70,7 @@ public partial class MainWindow : Window
         _pollSoon = pollSoon;
         _debugSimulator = debugSimulator;
         _applyMonitoringSettings = applyMonitoringSettings;
+        _updateService = updateService;
 
         InitializeComponent();
 
@@ -88,6 +93,7 @@ public partial class MainWindow : Window
         {
             ClampToWorkArea();
             ApplyDebugOverlayVisibility();
+            _ = MaybeAutoCheckForUpdateAsync();
         };
 
         if (spritePet is null)
@@ -509,6 +515,70 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             ReportPollStatus($"sim error: {exception.GetType().Name}");
+        }
+    }
+
+    private async Task MaybeAutoCheckForUpdateAsync()
+    {
+        // Decision: auto-update default OFF; when ON, check once at launch.
+        // Startup failures are silent (logged) — only manual checks show errors.
+        if (!_settings.AutoUpdate || _updateService is null || !_updateService.IsSupported)
+        {
+            return;
+        }
+
+        try
+        {
+            UpdateInfo? info = await _updateService.CheckAsync();
+            if (info is not null)
+            {
+                await PromptAndApplyUpdateAsync(info);
+            }
+        }
+        catch (Exception)
+        {
+            // Silent on launch (offline, GitHub hiccup, etc.).
+        }
+    }
+
+    /// <summary>
+    /// Shared confirm → download → apply → restart flow used by both the
+    /// launch auto-check and the About tab's manual check. Returns only if
+    /// the user declines or the update fails (success restarts the process).
+    /// </summary>
+    public async Task PromptAndApplyUpdateAsync(UpdateInfo info)
+    {
+        if (_updateService is null)
+        {
+            return;
+        }
+
+        string newVersion = info.TargetFullRelease.Version.ToString();
+        MessageBoxResult choice = MessageBox.Show(
+            this,
+            $"HyperPet v{newVersion} is available. Download and update now?\n\nThe app will restart to finish.",
+            "HyperPet Update",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (choice != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            await _updateService.DownloadAndApplyAsync(info);
+            // ApplyUpdatesAndRestart replaces the process; code below won't run.
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                this,
+                $"The update could not be installed.\n\n{exception.Message}",
+                "HyperPet Update",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
     }
 

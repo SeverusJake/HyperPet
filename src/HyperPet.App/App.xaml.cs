@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Threading;
 using HyperPet.App.Notifications;
 using HyperPet.App.Pets;
+using HyperPet.App.Update;
 using HyperPet.App.Views;
 using HyperPet.Core.Diagnostics;
 using HyperPet.Core.Notifications;
@@ -92,6 +93,7 @@ public partial class App : Application
             ApplyStatePlayModeOverrides(spritePet, _settings);
         }
 
+        var updateService = new UpdateService(_logger);
         _mainWindow = new MainWindow(
             _settings,
             ApplyStartupSetting,
@@ -103,7 +105,8 @@ public partial class App : Application
             SetPollInterval,
             PollSoon,
             debugSimulator,
-            ApplyMonitoringSettings)
+            ApplyMonitoringSettings,
+            updateService)
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
