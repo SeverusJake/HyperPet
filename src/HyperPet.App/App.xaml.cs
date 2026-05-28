@@ -32,6 +32,7 @@ public partial class App : Application
     private InAppNotificationWatcher? _inAppWatcher;
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
     private HyperPetLogger? _logger;
+    private IReadOnlyList<PetCatalogEntry> _petCatalog = Array.Empty<PetCatalogEntry>();
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -70,7 +71,10 @@ public partial class App : Application
         _notificationListener = notificationListener;
         var appLauncher = new AppLauncher();
         var debugSimulator = new DebugNotificationSimulator(_logger);
-        SpritePet? spritePet = await TryLoadSpritePetAsync(_logger);
+        string petsRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Pets");
+        _petCatalog = await PetCatalog.DiscoverAsync(petsRoot);
+        PetCatalogEntry? selectedEntry = PetCatalog.Resolve(_petCatalog, _settings.SelectedPet);
+        SpritePet? spritePet = await TryLoadSpritePetAsync(_logger, selectedEntry);
 
         // Snapshot original per-state fps + play mode BEFORE applying any
         // user overrides so the Settings dialog's "Reset" / "Default" can
@@ -106,7 +110,8 @@ public partial class App : Application
             PollSoon,
             debugSimulator,
             ApplyMonitoringSettings,
-            updateService)
+            updateService,
+            _petCatalog)
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
@@ -464,21 +469,21 @@ public partial class App : Application
         _inAppWatcher.Start();
     }
 
-    private static async Task<SpritePet?> TryLoadSpritePetAsync(HyperPetLogger logger)
+    private static async Task<SpritePet?> TryLoadSpritePetAsync(HyperPetLogger logger, PetCatalogEntry? entry)
     {
-        string petDirectory = Path.Combine(
-            AppContext.BaseDirectory,
-            "Assets",
-            "Pets",
-            "miku-kimono.codex-pet");
+        if (entry is null)
+        {
+            logger.Error("No installed pets found under Assets/Pets.");
+            return null;
+        }
 
         try
         {
-            return await SpritePetLoader.LoadAsync(petDirectory);
+            return await SpritePetLoader.LoadAsync(entry.Directory);
         }
         catch (Exception exception)
         {
-            logger.Error($"Could not load sprite pet from '{petDirectory}'", exception);
+            logger.Error($"Could not load sprite pet '{entry.Id}' from '{entry.Directory}'", exception);
             return null;
         }
     }

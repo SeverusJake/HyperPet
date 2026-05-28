@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private readonly DebugNotificationSimulator? _debugSimulator;
     private readonly Action? _applyMonitoringSettings;
     private readonly UpdateService? _updateService;
+    private readonly IReadOnlyList<PetCatalogEntry> _petCatalog;
     private readonly IAppLauncher? _appLauncher;
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
@@ -61,7 +62,8 @@ public partial class MainWindow : Window
         Action<TimeSpan>? pollSoon = null,
         DebugNotificationSimulator? debugSimulator = null,
         Action? applyMonitoringSettings = null,
-        UpdateService? updateService = null)
+        UpdateService? updateService = null,
+        IReadOnlyList<PetCatalogEntry>? petCatalog = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -75,6 +77,7 @@ public partial class MainWindow : Window
         _debugSimulator = debugSimulator;
         _applyMonitoringSettings = applyMonitoringSettings;
         _updateService = updateService;
+        _petCatalog = petCatalog ?? Array.Empty<PetCatalogEntry>();
 
         InitializeComponent();
 
@@ -396,7 +399,8 @@ public partial class MainWindow : Window
             _originalStateFps,
             _originalStatePlayMode,
             _updateService,
-            PromptAndApplyUpdateAsync)
+            PromptAndApplyUpdateAsync,
+            _petCatalog)
         {
             Owner = this
         };

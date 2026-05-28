@@ -26,6 +26,8 @@ public partial class SettingsWindow : Window
     private readonly IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
     private readonly UpdateService? _updateService;
     private readonly Func<UpdateInfo, Task>? _promptAndApply;
+    private readonly IReadOnlyList<PetCatalogEntry> _petCatalog;
+    private readonly string _originalSelectedPet;
     private bool _initializing = true;
     private bool _dirty;
     // Sticky: flips true on first user edit, never goes false again for the
@@ -56,7 +58,8 @@ public partial class SettingsWindow : Window
         IReadOnlyDictionary<string, int>? originalStateFps = null,
         IReadOnlyDictionary<string, PlayMode>? originalStatePlayMode = null,
         UpdateService? updateService = null,
-        Func<UpdateInfo, Task>? promptAndApply = null)
+        Func<UpdateInfo, Task>? promptAndApply = null,
+        IReadOnlyList<PetCatalogEntry>? petCatalog = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -66,6 +69,8 @@ public partial class SettingsWindow : Window
         _originalStatePlayMode = originalStatePlayMode;
         _updateService = updateService;
         _promptAndApply = promptAndApply;
+        _petCatalog = petCatalog ?? Array.Empty<PetCatalogEntry>();
+        _originalSelectedPet = settings.SelectedPet;
 
         InitializeComponent();
 
@@ -87,6 +92,13 @@ public partial class SettingsWindow : Window
         QuietHoursEndTextBox.Text = settings.QuietHoursEnd;
         Title = $"Settings - {AppVersion.DisplayString}";
         AboutVersionText.Text = AppVersion.DisplayString;
+
+        PetPickerComboBox.ItemsSource = _petCatalog;
+        PetPickerComboBox.SelectedValue = settings.SelectedPet;
+        if (PetPickerComboBox.SelectedItem is null && _petCatalog.Count > 0)
+        {
+            PetPickerComboBox.SelectedIndex = 0;
+        }
 
         _messagingApps = new ObservableCollection<MessagingAppRuleViewModel>(
             settings.MessagingApps.Select(rule => new MessagingAppRuleViewModel(rule)));
@@ -153,6 +165,7 @@ public partial class SettingsWindow : Window
         QuietHoursCheckBox.Click += OnAnyChange;
 
         PetBehaviorComboBox.SelectionChanged += OnAnyChange;
+        PetPickerComboBox.SelectionChanged += OnAnyChange;
 
         AlertDurationTextBox.TextChanged += OnAnyChange;
         WindowsPollIntervalTextBox.TextChanged += OnAnyChange;
@@ -426,11 +439,26 @@ public partial class SettingsWindow : Window
         // the current pet into _settings and mutate the live PetDefinition so
         // the change takes effect immediately (caller restarts the animator).
         _settings.AutoUpdate = AutoUpdateCheckBox.IsChecked == true;
+        if (PetPickerComboBox.SelectedValue is string selectedPetId && !string.IsNullOrWhiteSpace(selectedPetId))
+        {
+            _settings.SelectedPet = selectedPetId;
+        }
         ApplyStateSpeedChanges();
 
         _applySettings?.Invoke();
         _dirty = false;
         UpdateButtonState();
+
+        if (!string.Equals(_settings.SelectedPet, _originalSelectedPet, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                this,
+                "The pet change will take effect the next time you start HyperPet.",
+                "HyperPet",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
         return true;
     }
 
