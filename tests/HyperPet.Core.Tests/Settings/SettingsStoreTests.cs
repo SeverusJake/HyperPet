@@ -89,6 +89,19 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveAsync_ThenLoadAsync_RoundTripsDesktopBehaviorMode()
+    {
+        var directory = CreateTempDirectory();
+        var store = new SettingsStore(directory);
+        var expected = new HyperPetSettings { PetBehaviorMode = PetBehaviorMode.Desktop };
+
+        await store.SaveAsync(expected);
+        var actual = await store.LoadAsync();
+
+        Assert.Equal(PetBehaviorMode.Desktop, actual.PetBehaviorMode);
+    }
+
+    [Fact]
     public async Task LoadAsync_WhenJsonCorrupt_BacksUpFileAndReturnsDefaults()
     {
         var directory = CreateTempDirectory();
