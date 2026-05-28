@@ -335,7 +335,9 @@ public partial class MainWindow : Window
             RefreshFromSettings,
             _spritePet,
             _originalStateFps,
-            _originalStatePlayMode)
+            _originalStatePlayMode,
+            _updateService,
+            PromptAndApplyUpdateAsync)
         {
             Owner = this
         };

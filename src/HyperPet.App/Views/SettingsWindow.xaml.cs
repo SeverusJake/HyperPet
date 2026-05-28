@@ -8,7 +8,9 @@ using HyperPet.App.Pets;
 using HyperPet.App.ViewModels;
 using HyperPet.Core.Notifications;
 using HyperPet.Core.Pets;
+using HyperPet.App.Update;
 using HyperPet.Core.Settings;
+using Velopack;
 
 namespace HyperPet.App.Views;
 
@@ -22,6 +24,8 @@ public partial class SettingsWindow : Window
     private readonly SpritePet? _spritePet;
     private readonly IReadOnlyDictionary<string, int>? _originalStateFps;
     private readonly IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
+    private readonly UpdateService? _updateService;
+    private readonly Func<UpdateInfo, Task>? _promptAndApply;
     private bool _initializing = true;
     private bool _dirty;
     // Sticky: flips true on first user edit, never goes false again for the
@@ -49,7 +53,9 @@ public partial class SettingsWindow : Window
         Action? applySettings = null,
         SpritePet? spritePet = null,
         IReadOnlyDictionary<string, int>? originalStateFps = null,
-        IReadOnlyDictionary<string, PlayMode>? originalStatePlayMode = null)
+        IReadOnlyDictionary<string, PlayMode>? originalStatePlayMode = null,
+        UpdateService? updateService = null,
+        Func<UpdateInfo, Task>? promptAndApply = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -57,6 +63,8 @@ public partial class SettingsWindow : Window
         _spritePet = spritePet;
         _originalStateFps = originalStateFps;
         _originalStatePlayMode = originalStatePlayMode;
+        _updateService = updateService;
+        _promptAndApply = promptAndApply;
 
         InitializeComponent();
 
@@ -71,6 +79,9 @@ public partial class SettingsWindow : Window
         PetSizeTextBox.Text = settings.PetSize.ToString();
         WindowsPollIntervalTextBox.Text = settings.WindowsNotificationPollIntervalSeconds.ToString();
         InAppPollIntervalTextBox.Text = settings.InAppNotificationPollIntervalSeconds.ToString();
+        AutoUpdateCheckBox.IsChecked = settings.AutoUpdate;
+        Title = $"Settings - {AppVersion.DisplayString}";
+        AboutVersionText.Text = AppVersion.DisplayString;
 
         _messagingApps = new ObservableCollection<MessagingAppRuleViewModel>(
             settings.MessagingApps.Select(rule => new MessagingAppRuleViewModel(rule)));
@@ -133,6 +144,7 @@ public partial class SettingsWindow : Window
         ReactToWindowsNotificationsCheckBox.Click += OnAnyChange;
         ReactToInAppNotificationsCheckBox.Click += OnAnyChange;
         DebugModeCheckBox.Click += OnAnyChange;
+        AutoUpdateCheckBox.Click += OnAnyChange;
 
         PetBehaviorComboBox.SelectionChanged += OnAnyChange;
 
@@ -259,6 +271,44 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private async void OnCheckForUpdateClick(object sender, RoutedEventArgs e)
+    {
+        if (_updateService is null || !_updateService.IsSupported)
+        {
+            UpdateStatusText.Text = "Updates are disabled for development builds.";
+            return;
+        }
+
+        CheckUpdateButton.IsEnabled = false;
+        UpdateStatusText.Text = "Checking…";
+
+        try
+        {
+            UpdateInfo? info = await _updateService.CheckAsync();
+            if (info is null)
+            {
+                UpdateStatusText.Text = "You're on the latest version.";
+            }
+            else
+            {
+                string v = info.TargetFullRelease.Version.ToString();
+                UpdateStatusText.Text = $"Update available: v{v}";
+                if (_promptAndApply is not null)
+                {
+                    await _promptAndApply(info);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            UpdateStatusText.Text = $"Could not check for updates: {exception.Message}";
+        }
+        finally
+        {
+            CheckUpdateButton.IsEnabled = true;
+        }
+    }
+
     private void OnResetStateSpeedClick(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement fe && fe.DataContext is StateSpeedRowViewModel row)
@@ -283,6 +333,7 @@ public partial class SettingsWindow : Window
         PetSizeTextBox.Text = DefaultPetSize.ToString();
         WindowsPollIntervalTextBox.Text = DefaultWindowsPollInterval.ToString();
         InAppPollIntervalTextBox.Text = DefaultInAppPollInterval.ToString();
+        AutoUpdateCheckBox.IsChecked = false;
 
         // Apps: restore factory list from MessagingAppRule.CreateDefaults().
         _messagingApps.Clear();
@@ -353,6 +404,7 @@ public partial class SettingsWindow : Window
         // After the main applier has run, write the state-speed overrides for
         // the current pet into _settings and mutate the live PetDefinition so
         // the change takes effect immediately (caller restarts the animator).
+        _settings.AutoUpdate = AutoUpdateCheckBox.IsChecked == true;
         ApplyStateSpeedChanges();
 
         _applySettings?.Invoke();
