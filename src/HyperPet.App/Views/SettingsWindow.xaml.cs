@@ -75,7 +75,7 @@ public partial class SettingsWindow : Window
         ReactToWindowsNotificationsCheckBox.IsChecked = settings.ReactToWindowsNotifications;
         ReactToInAppNotificationsCheckBox.IsChecked = settings.ReactToInAppNotifications;
         DebugModeCheckBox.IsChecked = settings.DebugMode;
-        PetBehaviorComboBox.SelectedIndex = settings.PetBehaviorMode == PetBehaviorMode.Desktop ? 1 : 0;
+        PetBehaviorComboBox.SelectedIndex = (int)settings.PetBehaviorMode;
         AlertDurationTextBox.Text = settings.AlertDurationSeconds.ToString();
         PetSizeTextBox.Text = settings.PetSize.ToString();
         RunningSpeedTextBox.Text = settings.RunningSpeed.ToString();
@@ -331,7 +331,7 @@ public partial class SettingsWindow : Window
         ReactToWindowsNotificationsCheckBox.IsChecked = DefaultReactToWindowsNotifications;
         ReactToInAppNotificationsCheckBox.IsChecked = DefaultReactToInAppNotifications;
         DebugModeCheckBox.IsChecked = DefaultDebugMode;
-        PetBehaviorComboBox.SelectedIndex = DefaultPetBehaviorMode == PetBehaviorMode.Desktop ? 1 : 0;
+        PetBehaviorComboBox.SelectedIndex = (int)DefaultPetBehaviorMode;
         AlertDurationTextBox.Text = DefaultAlertDuration.ToString();
         PetSizeTextBox.Text = DefaultPetSize.ToString();
         RunningSpeedTextBox.Text = DefaultRunningSpeed.ToString();
@@ -365,9 +365,12 @@ public partial class SettingsWindow : Window
     private bool CommitChanges()
     {
         bool requestedStartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
-        PetBehaviorMode requestedPetBehaviorMode = PetBehaviorComboBox.SelectedIndex == 1
-            ? PetBehaviorMode.Desktop
-            : PetBehaviorMode.Calm;
+        PetBehaviorMode requestedPetBehaviorMode = PetBehaviorComboBox.SelectedIndex switch
+        {
+            1 => PetBehaviorMode.Running,
+            2 => PetBehaviorMode.Desktop,
+            _ => PetBehaviorMode.Calm,
+        };
 
         int alertDuration = ParseOrDefault(AlertDurationTextBox.Text, _settings.AlertDurationSeconds);
         int windowsInterval = ParseOrDefault(WindowsPollIntervalTextBox.Text, _settings.WindowsNotificationPollIntervalSeconds);

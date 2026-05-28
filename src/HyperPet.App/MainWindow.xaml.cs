@@ -164,13 +164,15 @@ public partial class MainWindow : Window
 
         StopBehaviorTimers();
 
-        if (_settings.PetBehaviorMode == PetBehaviorMode.Desktop)
+        switch (_settings.PetBehaviorMode)
         {
-            StartDesktopMode();
-            return;
+            case PetBehaviorMode.Running:
+                StartRunningMode();
+                return;
+            default:
+                StartCalmMode();
+                return;
         }
-
-        StartCalmMode();
     }
 
     private void StartCalmMode()
@@ -193,7 +195,7 @@ public partial class MainWindow : Window
         Top = Math.Clamp(Top, workArea.Top, maxTop);
     }
 
-    private void StartDesktopMode()
+    private void StartRunningMode()
     {
         _calmTimer.Stop();
         _petAnimator?.Play(_movingRight ? "runRight" : "runLeft");

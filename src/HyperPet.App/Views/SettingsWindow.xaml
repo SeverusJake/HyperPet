@@ -57,6 +57,7 @@
                                       SelectedIndex="0">
                                 <ComboBoxItem Content="Calm" />
                                 <ComboBoxItem Content="Running" />
+                                <ComboBoxItem Content="Desktop" />
                             </ComboBox>
                         </StackPanel>
                     </StackPanel>
