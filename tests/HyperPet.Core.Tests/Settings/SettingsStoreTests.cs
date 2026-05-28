@@ -27,6 +27,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(30, settings.WindowsNotificationPollIntervalSeconds);
         Assert.Equal(2, settings.InAppNotificationPollIntervalSeconds);
         Assert.True(settings.OpenAppOnBubbleClick);
+        Assert.False(settings.AutoUpdate);
         Assert.Equal(3, settings.MessagingApps.Count);
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Discord");
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Zalo");
@@ -54,6 +55,7 @@ public sealed class SettingsStoreTests : IDisposable
             WindowsNotificationPollIntervalSeconds = 15,
             InAppNotificationPollIntervalSeconds = 5,
             OpenAppOnBubbleClick = true,
+            AutoUpdate = true,
             MessagingApps = new List<MessagingAppRule>
             {
                 new("Telegram", new[] { "Telegram" }),
@@ -77,6 +79,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(15, actual.WindowsNotificationPollIntervalSeconds);
         Assert.Equal(5, actual.InAppNotificationPollIntervalSeconds);
         Assert.True(actual.OpenAppOnBubbleClick);
+        Assert.True(actual.AutoUpdate);
         Assert.Equal(2, actual.MessagingApps.Count);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Telegram" && app.Enabled);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Slack" && !app.Enabled);

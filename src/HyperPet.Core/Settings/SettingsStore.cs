@@ -85,6 +85,7 @@ public sealed class SettingsStore
             WindowsNotificationPollIntervalSeconds = Math.Clamp(settings.WindowsNotificationPollIntervalSeconds, 5, 600),
             InAppNotificationPollIntervalSeconds = Math.Clamp(settings.InAppNotificationPollIntervalSeconds, 1, 60),
             DebugMode = settings.DebugMode,
+            AutoUpdate = settings.AutoUpdate,
             MessagingApps = SanitizeMessagingApps(settings.MessagingApps),
             WatchedInAppProcesses = settings.WatchedInAppProcesses?.ToList() ?? new List<string> { "Zalo" }
         };

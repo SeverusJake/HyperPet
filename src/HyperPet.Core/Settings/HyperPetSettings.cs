@@ -55,6 +55,13 @@ public sealed class HyperPetSettings
     /// </summary>
     public bool DebugMode { get; set; }
 
+    /// <summary>
+    /// When true, HyperPet checks GitHub for a newer release once at launch
+    /// and prompts to install it. Manual checks via the About tab work
+    /// regardless of this flag. Off by default.
+    /// </summary>
+    public bool AutoUpdate { get; set; } = false;
+
     public List<MessagingAppRule> MessagingApps { get; set; } = MessagingAppRule.CreateDefaults().ToList();
 
     /// <summary>
