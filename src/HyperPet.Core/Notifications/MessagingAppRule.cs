@@ -1,9 +1,9 @@
 namespace HyperPet.Core.Notifications;
 
 /// <summary>
-/// Rule describing how to recognize a messaging app's notifications. The pet
-/// only reacts to apps that match one of the configured rules when
-/// <c>OnlyMessagingApps</c> is enabled in settings.
+/// Rule describing how to recognize an app's notifications. When a rule's
+/// patterns match a notification and the rule is disabled, the pet suppresses
+/// that app's alerts (per-app block, applied in PetController).
 /// </summary>
 public sealed class MessagingAppRule
 {
@@ -28,39 +28,6 @@ public sealed class MessagingAppRule
     public List<string> MatchPatterns { get; set; } = new();
 
     public bool Enabled { get; set; } = true;
-
-    public bool Matches(HyperNotification notification)
-    {
-        if (!Enabled || MatchPatterns.Count == 0)
-        {
-            return false;
-        }
-
-        foreach (var pattern in MatchPatterns)
-        {
-            if (string.IsNullOrWhiteSpace(pattern))
-            {
-                continue;
-            }
-
-            if (Contains(notification.AppName, pattern) || Contains(notification.AppUserModelId, pattern))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool Contains(string source, string pattern)
-    {
-        if (string.IsNullOrEmpty(source))
-        {
-            return false;
-        }
-
-        return source.Contains(pattern, StringComparison.OrdinalIgnoreCase);
-    }
 
     public static IReadOnlyList<MessagingAppRule> CreateDefaults()
     {

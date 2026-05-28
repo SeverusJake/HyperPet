@@ -5,17 +5,10 @@ namespace HyperPet.Core.Pet;
 
 public sealed class PetController
 {
-    private readonly MessagingAppFilter? _messagingAppFilter;
     private readonly Func<DateTime> _clock;
 
-    public PetController()
-        : this(messagingAppFilter: null)
+    public PetController(Func<DateTime>? clock = null)
     {
-    }
-
-    public PetController(MessagingAppFilter? messagingAppFilter, Func<DateTime>? clock = null)
-    {
-        _messagingAppFilter = messagingAppFilter;
         _clock = clock ?? (() => DateTime.Now);
     }
 

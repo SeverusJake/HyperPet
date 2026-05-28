@@ -41,7 +41,7 @@ public sealed class PetControllerTests
     public void HandleNotification_WhenInsideQuietHours_ReturnsNull()
     {
         // Clock fixed at 23:00, window 22:00-07:00 -> inside.
-        var controller = new PetController(messagingAppFilter: null, clock: () => new DateTime(2026, 5, 28, 23, 0, 0));
+        var controller = new PetController(clock: () => new DateTime(2026, 5, 28, 23, 0, 0));
         var settings = HyperPetSettings.CreateDefault();
         settings.QuietHoursEnabled = true;
         settings.QuietHoursStart = "22:00";
@@ -57,7 +57,7 @@ public sealed class PetControllerTests
     public void HandleNotification_OutsideQuietHours_ShowsAlert()
     {
         // Clock fixed at 12:00, window 22:00-07:00 -> outside.
-        var controller = new PetController(messagingAppFilter: null, clock: () => new DateTime(2026, 5, 28, 12, 0, 0));
+        var controller = new PetController(clock: () => new DateTime(2026, 5, 28, 12, 0, 0));
         var settings = HyperPetSettings.CreateDefault();
         settings.QuietHoursEnabled = true;
         settings.QuietHoursStart = "22:00";
@@ -73,7 +73,7 @@ public sealed class PetControllerTests
     public void HandleNotification_QuietHoursDisabled_IgnoresWindow()
     {
         // Inside the window time-wise, but the feature is off -> alert shows.
-        var controller = new PetController(messagingAppFilter: null, clock: () => new DateTime(2026, 5, 28, 23, 0, 0));
+        var controller = new PetController(clock: () => new DateTime(2026, 5, 28, 23, 0, 0));
         var settings = HyperPetSettings.CreateDefault();
         settings.QuietHoursEnabled = false;
         settings.QuietHoursStart = "22:00";
