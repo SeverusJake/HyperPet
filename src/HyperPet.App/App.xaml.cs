@@ -14,6 +14,7 @@ using HyperPet.Core.Pets;
 using HyperPet.Core.Settings;
 using HyperPet.Windows.Notifications;
 using HyperPet.Windows.Startup;
+using Velopack;
 
 namespace HyperPet.App;
 
@@ -33,6 +34,11 @@ public partial class App : Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // MUST be the first thing the process does — wires Velopack's
+        // install / uninstall / first-run / restart hooks. Late placement
+        // breaks the update lifecycle.
+        VelopackApp.Build().Run();
+
         base.OnStartup(e);
 
         string settingsDirectory = Path.Combine(
