@@ -47,7 +47,7 @@ public sealed class UpdateService
     public async Task DownloadAndApplyAsync(UpdateInfo info, Action<int>? progress = null)
     {
         _logger?.Info($"UpdateService: downloading update to v{info.TargetFullRelease.Version}");
-        await _manager.DownloadUpdatesAsync(info, progress, false);
+        await _manager.DownloadUpdatesAsync(info, progress);
         _logger?.Info("UpdateService: applying update and restarting");
         _manager.ApplyUpdatesAndRestart(info);
     }
