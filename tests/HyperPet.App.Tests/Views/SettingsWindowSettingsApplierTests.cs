@@ -38,6 +38,9 @@ public sealed class SettingsWindowSettingsApplierTests
             petSize: 7,
             runningSpeed: 5,
             debugMode: false,
+            quietHoursEnabled: false,
+            quietHoursStart: "22:00",
+            quietHoursEnd: "07:00",
             messagingApps: new List<MessagingAppRule>
             {
                 new("Telegram", new[] { "Telegram" })
@@ -95,6 +98,9 @@ public sealed class SettingsWindowSettingsApplierTests
             petSize: 10,
             runningSpeed: 12,
             debugMode: true,
+            quietHoursEnabled: true,
+            quietHoursStart: "23:30",
+            quietHoursEnd: "06:15",
             messagingApps: newApps,
             applyStartupSetting: value => appliedStartup = value,
             showStartupWarning: _ => throw new InvalidOperationException("warning should not show"));

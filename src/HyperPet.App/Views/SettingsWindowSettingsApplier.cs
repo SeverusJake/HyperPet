@@ -20,6 +20,9 @@ public static class SettingsWindowSettingsApplier
         int petSize,
         int runningSpeed,
         bool debugMode,
+        bool quietHoursEnabled,
+        string quietHoursStart,
+        string quietHoursEnd,
         IReadOnlyList<MessagingAppRule> messagingApps,
         Action<bool> applyStartupSetting,
         Action<string> showStartupWarning)
@@ -53,6 +56,14 @@ public static class SettingsWindowSettingsApplier
         settings.PetSize = Math.Clamp(petSize, 1, 10);
         settings.RunningSpeed = Math.Clamp(runningSpeed, 1, 20);
         settings.DebugMode = debugMode;
+        settings.QuietHoursEnabled = quietHoursEnabled;
+        // Keep the previous stored value when a field is not a valid "HH:mm".
+        settings.QuietHoursStart = QuietHoursSchedule.TryParse(quietHoursStart) is not null
+            ? quietHoursStart.Trim()
+            : settings.QuietHoursStart;
+        settings.QuietHoursEnd = QuietHoursSchedule.TryParse(quietHoursEnd) is not null
+            ? quietHoursEnd.Trim()
+            : settings.QuietHoursEnd;
         settings.MessagingApps = messagingApps?.ToList() ?? MessagingAppRule.CreateDefaults().ToList();
 
         return true;

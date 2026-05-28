@@ -82,6 +82,9 @@ public partial class SettingsWindow : Window
         WindowsPollIntervalTextBox.Text = settings.WindowsNotificationPollIntervalSeconds.ToString();
         InAppPollIntervalTextBox.Text = settings.InAppNotificationPollIntervalSeconds.ToString();
         AutoUpdateCheckBox.IsChecked = settings.AutoUpdate;
+        QuietHoursCheckBox.IsChecked = settings.QuietHoursEnabled;
+        QuietHoursStartTextBox.Text = settings.QuietHoursStart;
+        QuietHoursEndTextBox.Text = settings.QuietHoursEnd;
         Title = $"Settings - {AppVersion.DisplayString}";
         AboutVersionText.Text = AppVersion.DisplayString;
 
@@ -147,6 +150,7 @@ public partial class SettingsWindow : Window
         ReactToInAppNotificationsCheckBox.Click += OnAnyChange;
         DebugModeCheckBox.Click += OnAnyChange;
         AutoUpdateCheckBox.Click += OnAnyChange;
+        QuietHoursCheckBox.Click += OnAnyChange;
 
         PetBehaviorComboBox.SelectionChanged += OnAnyChange;
 
@@ -155,6 +159,8 @@ public partial class SettingsWindow : Window
         InAppPollIntervalTextBox.TextChanged += OnAnyChange;
         PetSizeTextBox.TextChanged += OnAnyChange;
         RunningSpeedTextBox.TextChanged += OnAnyChange;
+        QuietHoursStartTextBox.TextChanged += OnAnyChange;
+        QuietHoursEndTextBox.TextChanged += OnAnyChange;
 
         _messagingApps.CollectionChanged += OnMessagingAppsCollectionChanged;
         foreach (var vm in _messagingApps)
@@ -335,6 +341,9 @@ public partial class SettingsWindow : Window
         AlertDurationTextBox.Text = DefaultAlertDuration.ToString();
         PetSizeTextBox.Text = DefaultPetSize.ToString();
         RunningSpeedTextBox.Text = DefaultRunningSpeed.ToString();
+        QuietHoursCheckBox.IsChecked = false;
+        QuietHoursStartTextBox.Text = "22:00";
+        QuietHoursEndTextBox.Text = "07:00";
         WindowsPollIntervalTextBox.Text = DefaultWindowsPollInterval.ToString();
         InAppPollIntervalTextBox.Text = DefaultInAppPollInterval.ToString();
         AutoUpdateCheckBox.IsChecked = false;
@@ -392,6 +401,9 @@ public partial class SettingsWindow : Window
             petSize,
             runningSpeed,
             DebugModeCheckBox.IsChecked == true,
+            QuietHoursCheckBox.IsChecked == true,
+            QuietHoursStartTextBox.Text,
+            QuietHoursEndTextBox.Text,
             _messagingApps.Select(vm => vm.ToModel()).ToList(),
             _applyStartupSetting,
             message =>

@@ -283,6 +283,34 @@
                                      PreviewTextInput="OnNumericPreviewTextInput"
                                      Text="2" />
                         </StackPanel>
+
+                        <CheckBox x:Name="QuietHoursCheckBox"
+                                  Margin="0,16,0,0"
+                                  Content="Quiet hours (suppress alerts during the window below)" />
+
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Start (HH:mm)" />
+                                <TextBox x:Name="QuietHoursStartTextBox"
+                                         Margin="0,6,0,0"
+                                         Width="80"
+                                         HorizontalAlignment="Left"
+                                         Text="22:00" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1"
+                                        Margin="16,0,0,0">
+                                <TextBlock Text="End (HH:mm)" />
+                                <TextBox x:Name="QuietHoursEndTextBox"
+                                         Margin="0,6,0,0"
+                                         Width="80"
+                                         HorizontalAlignment="Left"
+                                         Text="07:00" />
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

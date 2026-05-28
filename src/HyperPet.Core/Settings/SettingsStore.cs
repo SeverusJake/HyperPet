@@ -87,6 +87,13 @@ public sealed class SettingsStore
             InAppNotificationPollIntervalSeconds = Math.Clamp(settings.InAppNotificationPollIntervalSeconds, 1, 60),
             DebugMode = settings.DebugMode,
             AutoUpdate = settings.AutoUpdate,
+            QuietHoursEnabled = settings.QuietHoursEnabled,
+            QuietHoursStart = QuietHoursSchedule.TryParse(settings.QuietHoursStart) is not null
+                ? settings.QuietHoursStart.Trim()
+                : "22:00",
+            QuietHoursEnd = QuietHoursSchedule.TryParse(settings.QuietHoursEnd) is not null
+                ? settings.QuietHoursEnd.Trim()
+                : "07:00",
             MessagingApps = SanitizeMessagingApps(settings.MessagingApps),
             WatchedInAppProcesses = settings.WatchedInAppProcesses?.ToList() ?? new List<string> { "Zalo" },
             StateSpeedOverrides = settings.StateSpeedOverrides ?? new(),

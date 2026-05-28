@@ -68,6 +68,19 @@ public sealed class HyperPetSettings
     /// </summary>
     public bool AutoUpdate { get; set; } = false;
 
+    /// <summary>
+    /// When true, alerts are suppressed during the daily window between
+    /// <see cref="QuietHoursStart"/> and <see cref="QuietHoursEnd"/> (which may
+    /// wrap past midnight). Independent of manual <see cref="AlertsPaused"/>.
+    /// </summary>
+    public bool QuietHoursEnabled { get; set; }
+
+    /// <summary>Quiet-hours window start as 24-hour "HH:mm". Default "22:00".</summary>
+    public string QuietHoursStart { get; set; } = "22:00";
+
+    /// <summary>Quiet-hours window end as 24-hour "HH:mm". Default "07:00".</summary>
+    public string QuietHoursEnd { get; set; } = "07:00";
+
     public List<MessagingAppRule> MessagingApps { get; set; } = MessagingAppRule.CreateDefaults().ToList();
 
     /// <summary>

@@ -38,6 +38,53 @@ public sealed class PetControllerTests
     }
 
     [Fact]
+    public void HandleNotification_WhenInsideQuietHours_ReturnsNull()
+    {
+        // Clock fixed at 23:00, window 22:00-07:00 -> inside.
+        var controller = new PetController(messagingAppFilter: null, clock: () => new DateTime(2026, 5, 28, 23, 0, 0));
+        var settings = HyperPetSettings.CreateDefault();
+        settings.QuietHoursEnabled = true;
+        settings.QuietHoursStart = "22:00";
+        settings.QuietHoursEnd = "07:00";
+
+        var alert = controller.HandleNotification(CreateNotification(), settings);
+
+        Assert.Null(alert);
+        Assert.Equal(PetState.Idle, controller.State);
+    }
+
+    [Fact]
+    public void HandleNotification_OutsideQuietHours_ShowsAlert()
+    {
+        // Clock fixed at 12:00, window 22:00-07:00 -> outside.
+        var controller = new PetController(messagingAppFilter: null, clock: () => new DateTime(2026, 5, 28, 12, 0, 0));
+        var settings = HyperPetSettings.CreateDefault();
+        settings.QuietHoursEnabled = true;
+        settings.QuietHoursStart = "22:00";
+        settings.QuietHoursEnd = "07:00";
+
+        var alert = controller.HandleNotification(CreateNotification(), settings);
+
+        Assert.NotNull(alert);
+        Assert.Equal(PetState.Alerting, controller.State);
+    }
+
+    [Fact]
+    public void HandleNotification_QuietHoursDisabled_IgnoresWindow()
+    {
+        // Inside the window time-wise, but the feature is off -> alert shows.
+        var controller = new PetController(messagingAppFilter: null, clock: () => new DateTime(2026, 5, 28, 23, 0, 0));
+        var settings = HyperPetSettings.CreateDefault();
+        settings.QuietHoursEnabled = false;
+        settings.QuietHoursStart = "22:00";
+        settings.QuietHoursEnd = "07:00";
+
+        var alert = controller.HandleNotification(CreateNotification(), settings);
+
+        Assert.NotNull(alert);
+    }
+
+    [Fact]
     public void HandleNotification_WhenFullContentDisabled_HidesTitleAndBody()
     {
         var controller = new PetController();

@@ -29,6 +29,9 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.True(settings.OpenAppOnBubbleClick);
         Assert.False(settings.AutoUpdate);
         Assert.Equal(2, settings.RunningSpeed);
+        Assert.False(settings.QuietHoursEnabled);
+        Assert.Equal("22:00", settings.QuietHoursStart);
+        Assert.Equal("07:00", settings.QuietHoursEnd);
         Assert.Equal(3, settings.MessagingApps.Count);
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Discord");
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Zalo");
@@ -58,6 +61,9 @@ public sealed class SettingsStoreTests : IDisposable
             OpenAppOnBubbleClick = true,
             AutoUpdate = true,
             RunningSpeed = 7,
+            QuietHoursEnabled = true,
+            QuietHoursStart = "23:30",
+            QuietHoursEnd = "06:15",
             MessagingApps = new List<MessagingAppRule>
             {
                 new("Telegram", new[] { "Telegram" }),
@@ -83,6 +89,9 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.True(actual.OpenAppOnBubbleClick);
         Assert.True(actual.AutoUpdate);
         Assert.Equal(7, actual.RunningSpeed);
+        Assert.True(actual.QuietHoursEnabled);
+        Assert.Equal("23:30", actual.QuietHoursStart);
+        Assert.Equal("06:15", actual.QuietHoursEnd);
         Assert.Equal(2, actual.MessagingApps.Count);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Telegram" && app.Enabled);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Slack" && !app.Enabled);

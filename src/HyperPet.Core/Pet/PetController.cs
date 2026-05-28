@@ -6,15 +6,17 @@ namespace HyperPet.Core.Pet;
 public sealed class PetController
 {
     private readonly MessagingAppFilter? _messagingAppFilter;
+    private readonly Func<DateTime> _clock;
 
     public PetController()
         : this(messagingAppFilter: null)
     {
     }
 
-    public PetController(MessagingAppFilter? messagingAppFilter)
+    public PetController(MessagingAppFilter? messagingAppFilter, Func<DateTime>? clock = null)
     {
         _messagingAppFilter = messagingAppFilter;
+        _clock = clock ?? (() => DateTime.Now);
     }
 
     public PetState State { get; private set; } = PetState.Idle;
@@ -24,6 +26,16 @@ public sealed class PetController
     public PetAlert? HandleNotification(HyperNotification notification, HyperPetSettings settings)
     {
         if (settings.AlertsPaused)
+        {
+            return null;
+        }
+
+        // Scheduled quiet hours: suppress while inside the configured window.
+        if (settings.QuietHoursEnabled
+            && QuietHoursSchedule.IsActive(
+                TimeOnly.FromDateTime(_clock()),
+                settings.QuietHoursStart,
+                settings.QuietHoursEnd))
         {
             return null;
         }
