@@ -28,6 +28,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(2, settings.InAppNotificationPollIntervalSeconds);
         Assert.True(settings.OpenAppOnBubbleClick);
         Assert.False(settings.AutoUpdate);
+        Assert.Equal(2, settings.RunningSpeed);
         Assert.Equal(3, settings.MessagingApps.Count);
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Discord");
         Assert.Contains(settings.MessagingApps, app => app.DisplayName == "Zalo");
@@ -56,6 +57,7 @@ public sealed class SettingsStoreTests : IDisposable
             InAppNotificationPollIntervalSeconds = 5,
             OpenAppOnBubbleClick = true,
             AutoUpdate = true,
+            RunningSpeed = 7,
             MessagingApps = new List<MessagingAppRule>
             {
                 new("Telegram", new[] { "Telegram" }),
@@ -80,6 +82,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(5, actual.InAppNotificationPollIntervalSeconds);
         Assert.True(actual.OpenAppOnBubbleClick);
         Assert.True(actual.AutoUpdate);
+        Assert.Equal(7, actual.RunningSpeed);
         Assert.Equal(2, actual.MessagingApps.Count);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Telegram" && app.Enabled);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Slack" && !app.Enabled);

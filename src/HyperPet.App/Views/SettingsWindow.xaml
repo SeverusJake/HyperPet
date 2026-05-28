@@ -254,6 +254,16 @@
                         </StackPanel>
 
                         <StackPanel Margin="0,12,0,0">
+                            <TextBlock Text="Running speed (1-20, default 2)" />
+                            <TextBox x:Name="RunningSpeedTextBox"
+                                     Margin="0,6,0,0"
+                                     Width="80"
+                                     HorizontalAlignment="Left"
+                                     PreviewTextInput="OnNumericPreviewTextInput"
+                                     Text="2" />
+                        </StackPanel>
+
+                        <StackPanel Margin="0,12,0,0">
                             <TextBlock Text="Windows poll interval (seconds, 5-600)" />
                             <TextBox x:Name="WindowsPollIntervalTextBox"
                                      Margin="0,6,0,0"

@@ -14,6 +14,12 @@ public sealed class HyperPetSettings
     /// Lower values shrink the sprite, higher values enlarge it.
     /// </summary>
     public int PetSize { get; set; } = 8;
+
+    /// <summary>
+    /// Horizontal move speed (pixels per movement tick) while the pet is in
+    /// Running behavior mode. 1-20, default 2.
+    /// </summary>
+    public int RunningSpeed { get; set; } = 2;
     public bool AlertsPaused { get; set; }
     public bool ShowFullNotificationContent { get; set; } = true;
     public bool StartWithWindows { get; set; }

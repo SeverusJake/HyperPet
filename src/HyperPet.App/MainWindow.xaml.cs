@@ -216,7 +216,8 @@ public partial class MainWindow : Window
     {
         Rect workArea = SystemParameters.WorkArea;
         double windowWidth = GetWindowWidth();
-        double nextLeft = Left + (_movingRight ? 2 : -2);
+        int speed = Math.Clamp(_settings.RunningSpeed, 1, 20);
+        double nextLeft = Left + (_movingRight ? speed : -speed);
 
         if (nextLeft <= workArea.Left)
         {

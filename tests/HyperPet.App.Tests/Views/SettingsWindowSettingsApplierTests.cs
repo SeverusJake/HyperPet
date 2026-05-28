@@ -36,6 +36,7 @@ public sealed class SettingsWindowSettingsApplierTests
             windowsPollIntervalSeconds: 15,
             inAppPollIntervalSeconds: 5,
             petSize: 7,
+            runningSpeed: 5,
             debugMode: false,
             messagingApps: new List<MessagingAppRule>
             {
@@ -92,6 +93,7 @@ public sealed class SettingsWindowSettingsApplierTests
             windowsPollIntervalSeconds: 45,
             inAppPollIntervalSeconds: 4,
             petSize: 10,
+            runningSpeed: 12,
             debugMode: true,
             messagingApps: newApps,
             applyStartupSetting: value => appliedStartup = value,

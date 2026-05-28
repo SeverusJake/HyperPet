@@ -44,6 +44,7 @@ public partial class SettingsWindow : Window
     private const bool DefaultDebugMode = false;
     private const int DefaultAlertDuration = 8;
     private const int DefaultPetSize = 8;
+    private const int DefaultRunningSpeed = 2;
     private const int DefaultWindowsPollInterval = 30;
     private const int DefaultInAppPollInterval = 2;
 
@@ -77,6 +78,7 @@ public partial class SettingsWindow : Window
         PetBehaviorComboBox.SelectedIndex = settings.PetBehaviorMode == PetBehaviorMode.Desktop ? 1 : 0;
         AlertDurationTextBox.Text = settings.AlertDurationSeconds.ToString();
         PetSizeTextBox.Text = settings.PetSize.ToString();
+        RunningSpeedTextBox.Text = settings.RunningSpeed.ToString();
         WindowsPollIntervalTextBox.Text = settings.WindowsNotificationPollIntervalSeconds.ToString();
         InAppPollIntervalTextBox.Text = settings.InAppNotificationPollIntervalSeconds.ToString();
         AutoUpdateCheckBox.IsChecked = settings.AutoUpdate;
@@ -152,6 +154,7 @@ public partial class SettingsWindow : Window
         WindowsPollIntervalTextBox.TextChanged += OnAnyChange;
         InAppPollIntervalTextBox.TextChanged += OnAnyChange;
         PetSizeTextBox.TextChanged += OnAnyChange;
+        RunningSpeedTextBox.TextChanged += OnAnyChange;
 
         _messagingApps.CollectionChanged += OnMessagingAppsCollectionChanged;
         foreach (var vm in _messagingApps)
@@ -331,6 +334,7 @@ public partial class SettingsWindow : Window
         PetBehaviorComboBox.SelectedIndex = DefaultPetBehaviorMode == PetBehaviorMode.Desktop ? 1 : 0;
         AlertDurationTextBox.Text = DefaultAlertDuration.ToString();
         PetSizeTextBox.Text = DefaultPetSize.ToString();
+        RunningSpeedTextBox.Text = DefaultRunningSpeed.ToString();
         WindowsPollIntervalTextBox.Text = DefaultWindowsPollInterval.ToString();
         InAppPollIntervalTextBox.Text = DefaultInAppPollInterval.ToString();
         AutoUpdateCheckBox.IsChecked = false;
@@ -369,6 +373,7 @@ public partial class SettingsWindow : Window
         int windowsInterval = ParseOrDefault(WindowsPollIntervalTextBox.Text, _settings.WindowsNotificationPollIntervalSeconds);
         int inAppInterval = ParseOrDefault(InAppPollIntervalTextBox.Text, _settings.InAppNotificationPollIntervalSeconds);
         int petSize = ParseOrDefault(PetSizeTextBox.Text, _settings.PetSize);
+        int runningSpeed = ParseOrDefault(RunningSpeedTextBox.Text, _settings.RunningSpeed);
 
         bool applied = SettingsWindowSettingsApplier.TryApply(
             _settings,
@@ -382,6 +387,7 @@ public partial class SettingsWindow : Window
             windowsInterval,
             inAppInterval,
             petSize,
+            runningSpeed,
             DebugModeCheckBox.IsChecked == true,
             _messagingApps.Select(vm => vm.ToModel()).ToList(),
             _applyStartupSetting,

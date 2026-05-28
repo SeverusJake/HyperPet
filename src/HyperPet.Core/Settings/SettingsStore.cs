@@ -74,6 +74,7 @@ public sealed class SettingsStore
                 : PetBehaviorMode.Calm,
             AlertDurationSeconds = Math.Clamp(settings.AlertDurationSeconds, 1, 600),
             PetSize = Math.Clamp(settings.PetSize, 1, 10),
+            RunningSpeed = Math.Clamp(settings.RunningSpeed, 1, 20),
             AlertsPaused = settings.AlertsPaused,
             ShowFullNotificationContent = settings.ShowFullNotificationContent,
             StartWithWindows = settings.StartWithWindows,
@@ -87,7 +88,9 @@ public sealed class SettingsStore
             DebugMode = settings.DebugMode,
             AutoUpdate = settings.AutoUpdate,
             MessagingApps = SanitizeMessagingApps(settings.MessagingApps),
-            WatchedInAppProcesses = settings.WatchedInAppProcesses?.ToList() ?? new List<string> { "Zalo" }
+            WatchedInAppProcesses = settings.WatchedInAppProcesses?.ToList() ?? new List<string> { "Zalo" },
+            StateSpeedOverrides = settings.StateSpeedOverrides ?? new(),
+            StatePlayModeOverrides = settings.StatePlayModeOverrides ?? new()
         };
     }
 
