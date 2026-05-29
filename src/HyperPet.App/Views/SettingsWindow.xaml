@@ -28,9 +28,25 @@
                         <StackPanel Margin="0,0,0,4">
                             <TextBlock Text="Pet" />
                             <ComboBox x:Name="PetPickerComboBox"
-                                      Margin="0,6,0,10"
+                                      Margin="0,6,0,6"
                                       DisplayMemberPath="DisplayName"
                                       SelectedValuePath="Id" />
+                            <StackPanel Orientation="Horizontal"
+                                        Margin="0,0,0,10">
+                                <Button Content="Add from zip…"
+                                        Padding="10,2"
+                                        Click="OnAddPetFromZipClick" />
+                                <Button Content="Add from folder…"
+                                        Margin="6,0,0,0"
+                                        Padding="10,2"
+                                        Click="OnAddPetFromFolderClick" />
+                                <Button x:Name="RemovePetButton"
+                                        Content="Remove pet"
+                                        Margin="6,0,0,0"
+                                        Padding="10,2"
+                                        IsEnabled="False"
+                                        Click="OnRemovePetClick" />
+                            </StackPanel>
                         </StackPanel>
 
                         <CheckBox x:Name="ShowFullContentCheckBox"

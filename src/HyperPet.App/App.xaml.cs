@@ -33,6 +33,8 @@ public partial class App : Application
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
     private HyperPetLogger? _logger;
     private IReadOnlyList<PetCatalogEntry> _petCatalog = Array.Empty<PetCatalogEntry>();
+    private string _builtinPetsRoot = string.Empty;
+    private string _userPetsRoot = string.Empty;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -71,8 +73,10 @@ public partial class App : Application
         _notificationListener = notificationListener;
         var appLauncher = new AppLauncher();
         var debugSimulator = new DebugNotificationSimulator(_logger);
-        string petsRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Pets");
-        _petCatalog = await PetCatalog.DiscoverAsync(petsRoot);
+        _builtinPetsRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Pets");
+        _userPetsRoot = Path.Combine(settingsDirectory, "Pets");
+        Directory.CreateDirectory(_userPetsRoot);
+        _petCatalog = await PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot);
         PetCatalogEntry? selectedEntry = PetCatalog.Resolve(_petCatalog, _settings.SelectedPet);
         SpritePet? spritePet = await TryLoadSpritePetAsync(_logger, selectedEntry);
 
@@ -103,7 +107,9 @@ public partial class App : Application
             ApplyMonitoringSettings,
             updateService,
             _petCatalog,
-            LoadPetByIdAsync)
+            LoadPetByIdAsync,
+            _userPetsRoot,
+            () => PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot))
         {
             Left = _settings.PetLeft,
             Top = _settings.PetTop
@@ -463,8 +469,8 @@ public partial class App : Application
 
     private async Task<SpritePet?> LoadPetByIdAsync(string petId)
     {
-        PetCatalogEntry? entry = PetCatalog.Resolve(_petCatalog, petId);
-        return await TryLoadSpritePetAsync(_logger!, entry);
+        var catalog = await PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot);
+        return await TryLoadSpritePetAsync(_logger!, PetCatalog.Resolve(catalog, petId));
     }
 
     private static async Task<SpritePet?> TryLoadSpritePetAsync(HyperPetLogger logger, PetCatalogEntry? entry)

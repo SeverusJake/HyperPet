@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
+using Microsoft.Win32;
 using System.Windows.Controls;
 using System.Windows.Input;
 using HyperPet.App.Pets;
@@ -26,9 +28,11 @@ public partial class SettingsWindow : Window
     private readonly IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
     private readonly UpdateService? _updateService;
     private readonly Func<UpdateInfo, Task>? _promptAndApply;
-    private readonly IReadOnlyList<PetCatalogEntry> _petCatalog;
+    private IReadOnlyList<PetCatalogEntry> _petCatalog;
     private string _originalSelectedPet;
     private readonly Func<string, Task>? _reloadPet;
+    private readonly string _userPetsRoot;
+    private readonly Func<Task<IReadOnlyList<PetCatalogEntry>>>? _rediscoverPets;
     private bool _initializing = true;
     private bool _dirty;
     // Sticky: flips true on first user edit, never goes false again for the
@@ -61,7 +65,9 @@ public partial class SettingsWindow : Window
         UpdateService? updateService = null,
         Func<UpdateInfo, Task>? promptAndApply = null,
         IReadOnlyList<PetCatalogEntry>? petCatalog = null,
-        Func<string, Task>? reloadPet = null)
+        Func<string, Task>? reloadPet = null,
+        string? userPetsRoot = null,
+        Func<Task<IReadOnlyList<PetCatalogEntry>>>? rediscoverPets = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -74,6 +80,8 @@ public partial class SettingsWindow : Window
         _petCatalog = petCatalog ?? Array.Empty<PetCatalogEntry>();
         _originalSelectedPet = settings.SelectedPet;
         _reloadPet = reloadPet;
+        _userPetsRoot = userPetsRoot ?? string.Empty;
+        _rediscoverPets = rediscoverPets;
 
         InitializeComponent();
 
@@ -112,6 +120,7 @@ public partial class SettingsWindow : Window
 
         WireDirtyTracking();
         UpdateButtonState();
+        UpdateRemoveButtonState();
 
         // ListBox item containers materialize during the first layout pass and
         // their TwoWay {Binding Enabled, UpdateSourceTrigger=PropertyChanged}
@@ -169,6 +178,7 @@ public partial class SettingsWindow : Window
 
         PetBehaviorComboBox.SelectionChanged += OnAnyChange;
         PetPickerComboBox.SelectionChanged += OnAnyChange;
+        PetPickerComboBox.SelectionChanged += (_, _) => UpdateRemoveButtonState();
 
         AlertDurationTextBox.TextChanged += OnAnyChange;
         WindowsPollIntervalTextBox.TextChanged += OnAnyChange;
@@ -294,6 +304,129 @@ public partial class SettingsWindow : Window
         {
             vm.Enabled = false;
         }
+    }
+
+    private void UpdateRemoveButtonState()
+    {
+        RemovePetButton.IsEnabled =
+            PetPickerComboBox.SelectedItem is PetCatalogEntry entry
+            && PetRemover.IsRemovable(entry.Directory, _userPetsRoot);
+    }
+
+    private async void OnAddPetFromZipClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Select a pet zip",
+            Filter = "Pet zip (*.zip)|*.zip",
+            CheckFileExists = true,
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        var result = await PetImporter.ImportFromZipAsync(dialog.FileName, _userPetsRoot, ConfirmOverwrite);
+        await HandleImportResultAsync(result);
+    }
+
+    private async void OnAddPetFromFolderClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Select a pet folder",
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        var result = await PetImporter.ImportFromFolderAsync(dialog.FolderName, _userPetsRoot, ConfirmOverwrite);
+        await HandleImportResultAsync(result);
+    }
+
+    private bool ConfirmOverwrite(string id)
+    {
+        return MessageBox.Show(
+            this,
+            $"A pet with id '{id}' already exists. Replace it?",
+            "HyperPet",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
+    private async Task HandleImportResultAsync(PetImportResult result)
+    {
+        if (!result.Success)
+        {
+            if (result.Message is not null && result.Message != "Import cancelled.")
+            {
+                MessageBox.Show(this, result.Message, "HyperPet", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            return;
+        }
+
+        await RefreshCatalogAsync();
+        MessageBox.Show(
+            this,
+            $"Added '{result.Entry!.DisplayName}'. Select it from the Pet list and click Apply to use it.",
+            "HyperPet",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private async void OnRemovePetClick(object sender, RoutedEventArgs e)
+    {
+        if (PetPickerComboBox.SelectedItem is not PetCatalogEntry entry
+            || !PetRemover.IsRemovable(entry.Directory, _userPetsRoot))
+        {
+            return;
+        }
+
+        if (MessageBox.Show(
+                this,
+                $"Remove the pet '{entry.DisplayName}'? This deletes its files.",
+                "HyperPet",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        PetRemover.TryRemove(entry.Directory, _userPetsRoot);
+
+        bool removedActive = string.Equals(entry.Id, _settings.SelectedPet, StringComparison.OrdinalIgnoreCase);
+        await RefreshCatalogAsync();
+
+        if (removedActive && _petCatalog.Count > 0)
+        {
+            string fallbackId = _petCatalog[0].Id;
+            _settings.SelectedPet = fallbackId;
+            PetPickerComboBox.SelectedValue = fallbackId;
+            _applySettings?.Invoke();
+            if (_reloadPet is not null)
+            {
+                _ = _reloadPet(fallbackId);
+            }
+        }
+    }
+
+    private async Task RefreshCatalogAsync()
+    {
+        if (_rediscoverPets is null)
+        {
+            return;
+        }
+
+        string? selected = PetPickerComboBox.SelectedValue as string;
+        _petCatalog = await _rediscoverPets();
+        PetPickerComboBox.ItemsSource = _petCatalog;
+        PetPickerComboBox.SelectedValue = selected;
+        if (PetPickerComboBox.SelectedItem is null && _petCatalog.Count > 0)
+        {
+            PetPickerComboBox.SelectedIndex = 0;
+        }
+        UpdateRemoveButtonState();
     }
 
     private async void OnCheckForUpdateClick(object sender, RoutedEventArgs e)

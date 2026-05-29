@@ -30,6 +30,8 @@ public partial class MainWindow : Window
     private readonly UpdateService? _updateService;
     private readonly IReadOnlyList<PetCatalogEntry> _petCatalog;
     private readonly Func<string, Task<SpritePet?>>? _petLoader;
+    private readonly string _userPetsRoot;
+    private readonly Func<Task<IReadOnlyList<PetCatalogEntry>>>? _rediscoverPets;
     private readonly IAppLauncher? _appLauncher;
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
@@ -65,7 +67,9 @@ public partial class MainWindow : Window
         Action? applyMonitoringSettings = null,
         UpdateService? updateService = null,
         IReadOnlyList<PetCatalogEntry>? petCatalog = null,
-        Func<string, Task<SpritePet?>>? petLoader = null)
+        Func<string, Task<SpritePet?>>? petLoader = null,
+        string? userPetsRoot = null,
+        Func<Task<IReadOnlyList<PetCatalogEntry>>>? rediscoverPets = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -81,6 +85,8 @@ public partial class MainWindow : Window
         _updateService = updateService;
         _petCatalog = petCatalog ?? Array.Empty<PetCatalogEntry>();
         _petLoader = petLoader;
+        _userPetsRoot = userPetsRoot ?? string.Empty;
+        _rediscoverPets = rediscoverPets;
 
         InitializeComponent();
 
@@ -404,7 +410,9 @@ public partial class MainWindow : Window
             _updateService,
             PromptAndApplyUpdateAsync,
             _petCatalog,
-            ReloadPetAsync)
+            ReloadPetAsync,
+            _userPetsRoot,
+            _rediscoverPets)
         {
             Owner = this
         };
