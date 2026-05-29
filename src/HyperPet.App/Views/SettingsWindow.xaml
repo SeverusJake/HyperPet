@@ -6,8 +6,7 @@
         Width="500"
         Height="640"
         Icon="/Assets/HyperPet.ico"
-        ResizeMode="NoResize"
-        WindowStartupLocation="CenterOwner">
+        ResizeMode="NoResize">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

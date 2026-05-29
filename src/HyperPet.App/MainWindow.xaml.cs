@@ -417,6 +417,14 @@ public partial class MainWindow : Window
             Owner = this
         };
 
+        settingsWindow.WindowStartupLocation = WindowStartupLocation.Manual;
+        Rect wa = SystemParameters.WorkArea;
+        Placement placement = SettingsPlacement.Compute(
+            Left, Top, GetWindowWidth(), GetWindowHeight(),
+            settingsWindow.Width, settingsWindow.Height,
+            wa.Left, wa.Top, wa.Right, wa.Bottom);
+        settingsWindow.Left = placement.Left;
+        settingsWindow.Top = placement.Top;
         settingsWindow.ShowDialog();
     }
 
