@@ -19,7 +19,7 @@ public static class AumiShortcutRegistrar
     /// <param name="aumi">The AppUserModelId, e.g. "HyperPet.Debug.Messenger".</param>
     /// <param name="displayName">User-visible app name in toasts, e.g. "HyperPet Debug Messenger".</param>
     /// <param name="targetPath">Optional path the shortcut launches. Defaults to the current process path.</param>
-    public static void EnsureRegistered(string aumi, string displayName, string? targetPath = null)
+    public static void EnsureRegistered(string aumi, string displayName, string? targetPath = null, string? iconPath = null)
     {
         if (string.IsNullOrWhiteSpace(aumi) || string.IsNullOrWhiteSpace(displayName))
         {
@@ -27,6 +27,10 @@ public static class AumiShortcutRegistrar
         }
 
         targetPath ??= Environment.ProcessPath ?? throw new InvalidOperationException("Cannot resolve target path.");
+        // The shortcut icon defaults to the app exe, which embeds HyperPet.ico
+        // (set via <ApplicationIcon>). This is what shows next to the app in
+        // Windows notification settings and the Start menu.
+        iconPath ??= targetPath;
 
         string startMenuPrograms = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -35,15 +39,19 @@ public static class AumiShortcutRegistrar
 
         string shortcutPath = Path.Combine(startMenuPrograms, displayName + ".lnk");
 
-        if (File.Exists(shortcutPath) && GetAumi(shortcutPath) == aumi)
+        // Re-create when the shortcut is missing, its AUMI differs, or its icon
+        // is not already pointing at our icon (older shortcuts had no icon set).
+        if (File.Exists(shortcutPath)
+            && GetAumi(shortcutPath) == aumi
+            && string.Equals(GetIconLocation(shortcutPath), iconPath, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
 
-        CreateShortcut(shortcutPath, aumi, targetPath);
+        CreateShortcut(shortcutPath, aumi, targetPath, iconPath);
     }
 
-    private static void CreateShortcut(string path, string aumi, string targetPath)
+    private static void CreateShortcut(string path, string aumi, string targetPath, string iconPath)
     {
         var shellLinkClass = Type.GetTypeFromCLSID(new Guid("00021401-0000-0000-C000-000000000046"))
             ?? throw new InvalidOperationException("ShellLink COM class missing.");
@@ -55,6 +63,7 @@ public static class AumiShortcutRegistrar
             var link = (IShellLinkW)instance;
             link.SetPath(targetPath);
             link.SetArguments(string.Empty);
+            link.SetIconLocation(iconPath, 0);
 
             var store = (IPropertyStore)instance;
             var key = PropertyKeys.AppUserModelId;
@@ -124,6 +133,40 @@ public static class AumiShortcutRegistrar
             {
                 pv.Clear();
             }
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            Marshal.FinalReleaseComObject(instance);
+        }
+    }
+
+    private static string? GetIconLocation(string shortcutPath)
+    {
+        var shellLinkClass = Type.GetTypeFromCLSID(new Guid("00021401-0000-0000-C000-000000000046"));
+        if (shellLinkClass is null)
+        {
+            return null;
+        }
+
+        object? instance = Activator.CreateInstance(shellLinkClass);
+        if (instance is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var persist = (IPersistFile)instance;
+            persist.Load(shortcutPath, 0);
+
+            var link = (IShellLinkW)instance;
+            var sb = new StringBuilder(260);
+            link.GetIconLocation(sb, sb.Capacity, out _);
+            return sb.ToString();
         }
         catch
         {
