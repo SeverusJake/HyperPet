@@ -71,6 +71,22 @@ public class PetCatalogTests : IDisposable
     }
 
     [Fact]
+    public async Task DiscoverAsync_DedupsById_FirstRootWins()
+    {
+        string builtin = MakeRoot();
+        string user = MakeRoot();
+        WritePet(builtin, "miku", "miku", "Miku Builtin");
+        WritePet(user, "miku-copy", "miku", "Miku User");   // same id
+        WritePet(user, "extra", "extra", "Extra");
+
+        var entries = await PetCatalog.DiscoverAsync(builtin, user);
+
+        Assert.Equal(2, entries.Count);
+        Assert.Contains(entries, e => e.Id == "miku" && e.DisplayName == "Miku Builtin");
+        Assert.Contains(entries, e => e.Id == "extra");
+    }
+
+    [Fact]
     public void Resolve_PrefersSelected_FallsBackToFirst()
     {
         var entries = new List<PetCatalogEntry>

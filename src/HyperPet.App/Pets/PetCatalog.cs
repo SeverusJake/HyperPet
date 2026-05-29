@@ -10,35 +10,43 @@ namespace HyperPet.App.Pets;
 public static class PetCatalog
 {
     /// <summary>
-    /// Returns one entry per subdirectory of <paramref name="petsRootDirectory"/>
-    /// that contains a parseable pet.json, ordered by display name. Returns an
-    /// empty list when the root is missing. Folders that fail to parse are
+    /// Returns one entry per subdirectory (across all <paramref name="roots"/>)
+    /// that contains a parseable pet.json, deduped by id (earlier roots win),
+    /// ordered by display name. Missing roots are skipped. Malformed pets are
     /// skipped.
     /// </summary>
-    public static async Task<IReadOnlyList<PetCatalogEntry>> DiscoverAsync(string petsRootDirectory)
+    public static async Task<IReadOnlyList<PetCatalogEntry>> DiscoverAsync(params string[] roots)
     {
         var entries = new List<PetCatalogEntry>();
-        if (!Directory.Exists(petsRootDirectory))
-        {
-            return entries;
-        }
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (string dir in Directory.EnumerateDirectories(petsRootDirectory))
+        foreach (string root in roots)
         {
-            string json = Path.Combine(dir, "pet.json");
-            if (!File.Exists(json))
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             {
                 continue;
             }
 
-            try
+            foreach (string dir in Directory.EnumerateDirectories(root))
             {
-                PetDefinition def = await PetDefinitionLoader.LoadAsync(dir).ConfigureAwait(false);
-                entries.Add(new PetCatalogEntry(def.Id, def.DisplayName, dir));
-            }
-            catch
-            {
-                // Skip malformed pet folders.
+                string json = Path.Combine(dir, "pet.json");
+                if (!File.Exists(json))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    PetDefinition def = await PetDefinitionLoader.LoadAsync(dir).ConfigureAwait(false);
+                    if (seenIds.Add(def.Id))
+                    {
+                        entries.Add(new PetCatalogEntry(def.Id, def.DisplayName, dir));
+                    }
+                }
+                catch
+                {
+                    // Skip malformed pet folders.
+                }
             }
         }
 
