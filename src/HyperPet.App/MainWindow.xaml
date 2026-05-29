@@ -15,7 +15,13 @@
         WindowStyle="None"
         Focusable="True"
         KeyDown="OnWindowKeyDown">
-    <Grid MouseLeftButtonDown="OnMouseLeftButtonDown">
+    <Grid MouseLeftButtonDown="OnMouseLeftButtonDown"
+          MouseMove="OnGridMouseMove"
+          MouseLeftButtonUp="OnGridMouseLeftButtonUp"
+          MouseEnter="OnGridMouseEnter"
+          MouseLeave="OnGridMouseLeave"
+          LostMouseCapture="OnGridLostMouseCapture"
+          Background="Transparent">
         <Grid.ContextMenu>
             <ContextMenu>
                 <MenuItem x:Name="VersionMenuItem"

@@ -46,6 +46,14 @@ public partial class MainWindow : Window
     private IReadOnlyDictionary<string, int>? _originalStateFps;
     private IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
     private bool _movingRight = true;
+    private bool _calmPressed;
+    private bool _calmDragging;
+    private System.Windows.Point _calmPressScreen;
+    private double _calmPressLeft;
+    private double _calmPressTop;
+    private double _calmLastX;
+    private const double CalmDragThreshold = 4;
+    private readonly DispatcherTimer _calmJumpTimer = new();
     private bool _alertActive;
     private TimeSpan _debugPollInterval = TimeSpan.FromSeconds(30);
     private DateTime _debugNextPollUtc = DateTime.UtcNow;
@@ -102,6 +110,7 @@ public partial class MainWindow : Window
 
         _alertTimer.Tick += (_, _) => DismissAlert();
         _calmTimer.Tick += OnCalmTimerTick;
+        _calmJumpTimer.Tick += OnCalmJumpTimerTick;
         _movementTimer.Tick += OnMovementTimerTick;
         _debugOverlayTimer.Interval = TimeSpan.FromSeconds(1);
         _debugOverlayTimer.Tick += OnDebugOverlayTimerTick;
@@ -256,7 +265,7 @@ public partial class MainWindow : Window
 
     private void OnCalmTimerTick(object? sender, EventArgs e)
     {
-        _petAnimator?.Play(_random.NextDouble() < 0.25 ? "waiting" : "idle");
+        _petAnimator?.Play(_random.NextDouble() < 0.25 ? "review" : "idle");
     }
 
     private void OnMovementTimerTick(object? sender, EventArgs e)
@@ -325,6 +334,11 @@ public partial class MainWindow : Window
         _petAnimator?.Play(_movingRight ? "runRight" : "runLeft");
     }
 
+    private bool IsCalmInteractive()
+        => _settings.PetBehaviorMode == PetBehaviorMode.Calm
+           && _petAnimator is not null
+           && !_alertActive;
+
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 2)
@@ -336,6 +350,23 @@ public partial class MainWindow : Window
 
         if (e.ButtonState != MouseButtonState.Pressed)
         {
+            return;
+        }
+
+        // Calm mode: manual drag so we can sample direction and tell a click
+        // (jump) from a drag (run). Other modes keep the simple DragMove path.
+        if (IsCalmInteractive())
+        {
+            _calmPressed = true;
+            _calmDragging = false;
+            _calmPressScreen = PointToScreen(e.GetPosition(this));
+            _calmPressLeft = Left;
+            _calmPressTop = Top;
+            _calmLastX = _calmPressScreen.X;
+            _calmJumpTimer.Stop();
+            StopBehaviorTimers();
+            CaptureMouse();
+            e.Handled = true;
             return;
         }
 
@@ -357,6 +388,131 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
+    }
+
+    private void OnGridMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_calmPressed)
+        {
+            return;
+        }
+
+        System.Windows.Point cur = PointToScreen(e.GetPosition(this));
+        double dxTotal = cur.X - _calmPressScreen.X;
+        double dyTotal = cur.Y - _calmPressScreen.Y;
+
+        if (!_calmDragging && Math.Abs(dxTotal) + Math.Abs(dyTotal) > CalmDragThreshold)
+        {
+            _calmDragging = true;
+        }
+
+        if (_calmDragging)
+        {
+            Left = _calmPressLeft + dxTotal;
+            Top = _calmPressTop + dyTotal;
+
+            if (cur.X > _calmLastX + 0.5)
+            {
+                PlayIfChanged("runRight");
+            }
+            else if (cur.X < _calmLastX - 0.5)
+            {
+                PlayIfChanged("runLeft");
+            }
+
+            _calmLastX = cur.X;
+        }
+    }
+
+    private void OnGridMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_calmPressed)
+        {
+            return;
+        }
+
+        ReleaseMouseCapture();
+        bool wasDragging = _calmDragging;
+        _calmPressed = false;
+        _calmDragging = false;
+
+        if (wasDragging)
+        {
+            StartBehaviorMode();
+        }
+        else
+        {
+            PlayJumpThenIdle();
+        }
+    }
+
+    private void OnGridLostMouseCapture(object sender, MouseEventArgs e)
+    {
+        if (!_calmPressed)
+        {
+            return;
+        }
+
+        _calmPressed = false;
+        _calmDragging = false;
+        StartBehaviorMode();
+    }
+
+    private void OnGridMouseEnter(object sender, MouseEventArgs e)
+    {
+        if (!IsCalmInteractive() || _calmPressed)
+        {
+            return;
+        }
+
+        StopBehaviorTimers();
+        _petAnimator?.Play("waiting");
+    }
+
+    private void OnGridMouseLeave(object sender, MouseEventArgs e)
+    {
+        if (!IsCalmInteractive() || _calmPressed)
+        {
+            return;
+        }
+
+        StartBehaviorMode();
+    }
+
+    private void PlayIfChanged(string state)
+    {
+        if (_petAnimator is { } a && a.StateName != state)
+        {
+            a.Play(state);
+        }
+    }
+
+    private void PlayJumpThenIdle()
+    {
+        _petAnimator?.Play("jumping");
+        _calmJumpTimer.Stop();
+        _calmJumpTimer.Interval = JumpDuration();
+        _calmJumpTimer.Start();
+    }
+
+    private void OnCalmJumpTimerTick(object? sender, EventArgs e)
+    {
+        _calmJumpTimer.Stop();
+        if (IsCalmInteractive())
+        {
+            StartBehaviorMode();
+        }
+    }
+
+    private TimeSpan JumpDuration()
+    {
+        var state = _spritePet?.Definition.GetState("jumping");
+        if (state is not null && state.Fps > 0 && state.Frames > 0)
+        {
+            return TimeSpan.FromSeconds(state.Frames / (double)state.Fps);
+        }
+
+        return TimeSpan.FromMilliseconds(800);
     }
 
     private void OnBubbleMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
