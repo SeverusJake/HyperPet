@@ -41,7 +41,28 @@ public partial class App : Application
         // MUST be the first thing the process does — wires Velopack's
         // install / uninstall / first-run / restart hooks. Late placement
         // breaks the update lifecycle.
-        VelopackApp.Build().Run();
+        VelopackApp.Build()
+            .OnBeforeUninstallFastCallback(_ =>
+            {
+                // Clean up user data (settings, logs, imported pets) so an
+                // uninstall leaves nothing behind. Best-effort; the uninstaller
+                // exits the process right after this hook.
+                try
+                {
+                    string dataDir = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "HyperPet");
+                    if (Directory.Exists(dataDir))
+                    {
+                        Directory.Delete(dataDir, recursive: true);
+                    }
+                }
+                catch
+                {
+                    // Ignore — never block uninstall on cleanup failure.
+                }
+            })
+            .Run();
 
         base.OnStartup(e);
 

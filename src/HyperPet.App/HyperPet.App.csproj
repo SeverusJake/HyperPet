@@ -8,10 +8,11 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>HyperPet</AssemblyName>
     <Product>HyperPet</Product>
-    <Version>0.4.5</Version>
-    <AssemblyVersion>0.4.5.0</AssemblyVersion>
-    <FileVersion>0.4.5.0</FileVersion>
-    <InformationalVersion>0.4.5</InformationalVersion>
+    <ApplicationIcon>Assets\HyperPet.ico</ApplicationIcon>
+    <Version>0.4.6</Version>
+    <AssemblyVersion>0.4.6.0</AssemblyVersion>
+    <FileVersion>0.4.6.0</FileVersion>
+    <InformationalVersion>0.4.6</InformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\HyperPet.Core\HyperPet.Core.csproj" />
@@ -25,6 +26,7 @@
     <None Remove="Assets\Pets\**\*.*" />
     <Content Include="Assets\Pets\**\*.*" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="Assets\Package\*.png" />
+    <Resource Include="Assets\HyperPet.ico" />
     <None Include="Package.appxmanifest" />
   </ItemGroup>
   <ItemGroup>

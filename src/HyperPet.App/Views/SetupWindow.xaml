@@ -4,6 +4,7 @@
         Title="HyperPet Setup"
         Width="420"
         Height="260"
+        Icon="/Assets/HyperPet.ico"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen">
     <Grid Margin="20">
