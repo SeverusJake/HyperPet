@@ -19,6 +19,7 @@ public sealed class WindowsNotificationListener : INotificationListener
     // wpnapps.dll lifetime bug. Memory cost: ~1 ref per unique notification
     // for the lifetime of the app session.
     private readonly List<UserNotification> retainedNotifications = new();
+    private const int MaxRetained = 256;
 
     public event EventHandler<HyperNotification>? NotificationAdded;
 
@@ -114,6 +115,7 @@ public sealed class WindowsNotificationListener : INotificationListener
                 lock (retainedNotifications)
                 {
                     retainedNotifications.Add(notification);
+                    TrimRetained();
                 }
                 NotificationAdded?.Invoke(this, hyper);
             }
@@ -152,6 +154,7 @@ public sealed class WindowsNotificationListener : INotificationListener
         lock (retainedNotifications)
         {
             retainedNotifications.AddRange(notifications);
+            TrimRetained();
         }
 
         return hyperNotifications;
@@ -162,6 +165,15 @@ public sealed class WindowsNotificationListener : INotificationListener
         cancellationToken.ThrowIfCancellationRequested();
 
         return Task.FromResult(false);
+    }
+
+    private void TrimRetained()
+    {
+        // Caller already holds the lock on retainedNotifications.
+        if (retainedNotifications.Count > MaxRetained)
+        {
+            retainedNotifications.RemoveRange(0, retainedNotifications.Count - MaxRetained);
+        }
     }
 
     private HyperNotification? TryConvert(UserNotification notification)
