@@ -25,7 +25,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.True(settings.ReactToWindowsNotifications);
         Assert.True(settings.ReactToInAppNotifications);
         Assert.Equal(30, settings.WindowsNotificationPollIntervalSeconds);
-        Assert.Equal(2, settings.InAppNotificationPollIntervalSeconds);
+        Assert.Equal(4, settings.InAppNotificationPollIntervalSeconds);
         Assert.True(settings.OpenAppOnBubbleClick);
         Assert.False(settings.AutoUpdate);
         Assert.Equal(2, settings.RunningSpeed);

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Automation;
 using System.Windows.Threading;
@@ -53,6 +53,9 @@ public sealed class InAppNotificationWatcher : IDisposable
     // reuse the same HWND for successive messages (text swapped in-place);
     // keying off handle alone would suppress every message after the first.
     private readonly Dictionary<IntPtr, string> _seenHandles = new();
+    // hwnd -> last window rect + extracted text. Skips the cross-process UI
+    // Automation walk when a popup hasn't moved/resized since last scan.
+    private readonly Dictionary<IntPtr, (RECT Rect, string Title, string Body)> _extractCache = new();
     private readonly HashSet<IntPtr> _excludedHandles = new();
     private readonly string _selfProcessName = Process.GetCurrentProcess().ProcessName;
     private IReadOnlyList<string> _watchedProcessNames = Array.Empty<string>();
@@ -124,6 +127,7 @@ public sealed class InAppNotificationWatcher : IDisposable
         Stop();
         _activator.Dispose();
         _seenHandles.Clear();
+        _extractCache.Clear();
     }
 
     private void Scan()
@@ -185,7 +189,19 @@ public sealed class InAppNotificationWatcher : IDisposable
                 bool isSelfProc = string.Equals(processName, _selfProcessName, StringComparison.OrdinalIgnoreCase);
                 string appName = isSelfProc ? "Sim" : processName;
 
-                (string title, string body) = ExtractText(hwnd, appName);
+                GetWindowRect(hwnd, out RECT rect);
+                string title, body;
+                if (_extractCache.TryGetValue(hwnd, out var cached) && RectEquals(cached.Rect, rect))
+                {
+                    title = cached.Title;
+                    body = cached.Body;
+                }
+                else
+                {
+                    (title, body) = ExtractText(hwnd, appName);
+                    _extractCache[hwnd] = (rect, title, body);
+                }
+
                 string contentHash = HashText(title + "" + body);
 
                 if (_seenHandles.TryGetValue(hwnd, out string? lastHash) && lastHash == contentHash)
@@ -208,6 +224,12 @@ public sealed class InAppNotificationWatcher : IDisposable
         foreach (var h in stale)
         {
             _seenHandles.Remove(h);
+        }
+
+        var staleExtract = _extractCache.Keys.Where(h => !liveHandles.Contains(h)).ToList();
+        foreach (var h in staleExtract)
+        {
+            _extractCache.Remove(h);
         }
     }
 
@@ -496,6 +518,9 @@ public sealed class InAppNotificationWatcher : IDisposable
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
+    private static bool RectEquals(RECT a, RECT b)
+        => a.Left == b.Left && a.Top == b.Top && a.Right == b.Right && a.Bottom == b.Bottom;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT

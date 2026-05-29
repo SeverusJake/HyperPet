@@ -51,7 +51,7 @@ public sealed class HyperPetSettings
     public int WindowsNotificationPollIntervalSeconds { get; set; } = 30;
 
     /// <summary>Poll interval (seconds) for the in-app popup watcher.</summary>
-    public int InAppNotificationPollIntervalSeconds { get; set; } = 2;
+    public int InAppNotificationPollIntervalSeconds { get; set; } = 4;
 
     /// <summary>
     /// When true, the pet window shows a small debug overlay with the next
