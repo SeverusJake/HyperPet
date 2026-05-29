@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using HyperPet.App.Pets.Roaming;
 using HyperPet.App.Pets;
@@ -418,7 +419,15 @@ public partial class MainWindow : Window
         };
 
         settingsWindow.WindowStartupLocation = WindowStartupLocation.Manual;
-        Rect wa = SystemParameters.WorkArea;
+
+        DpiScale dpi = VisualTreeHelper.GetDpi(this);
+        WorkArea? monitor = MonitorWorkArea.ForPoint(
+            Left + GetWindowWidth() / 2, Top + GetWindowHeight() / 2,
+            dpi.DpiScaleX, dpi.DpiScaleY);
+
+        Rect primary = SystemParameters.WorkArea;
+        WorkArea wa = monitor ?? new WorkArea(primary.Left, primary.Top, primary.Right, primary.Bottom);
+
         Placement placement = SettingsPlacement.Compute(
             Left, Top, GetWindowWidth(), GetWindowHeight(),
             settingsWindow.Width, settingsWindow.Height,
