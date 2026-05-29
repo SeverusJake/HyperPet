@@ -17,14 +17,32 @@ public sealed class WindowLedgeProvider : ILedgeProvider
     private const int MinLedgeWidth = 80;
 
     private readonly IntPtr _selfHwnd;
+    private readonly Func<DateTime> _clock;
+    private IReadOnlyList<Ledge>? _cache;
+    private DateTime _cacheUtc;
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromMilliseconds(1000);
 
-    public WindowLedgeProvider(IntPtr selfHwnd)
+    public WindowLedgeProvider(IntPtr selfHwnd) : this(selfHwnd, () => DateTime.UtcNow)
+    {
+    }
+
+    internal WindowLedgeProvider(IntPtr selfHwnd, Func<DateTime> clock)
     {
         _selfHwnd = selfHwnd;
+        _clock = clock;
     }
+
+    internal static bool ShouldRebuild(DateTime nowUtc, DateTime cacheUtc, bool hasCache, TimeSpan ttl)
+        => !hasCache || (nowUtc - cacheUtc) >= ttl;
 
     public IReadOnlyList<Ledge> GetLedges()
     {
+        DateTime now = _clock();
+        if (!ShouldRebuild(now, _cacheUtc, _cache is not null, CacheTtl))
+        {
+            return _cache!;
+        }
+
         var ledges = new List<Ledge>();
 
         EnumWindows((hwnd, _) =>
@@ -50,6 +68,8 @@ public sealed class WindowLedgeProvider : ILedgeProvider
         Rect wa = SystemParameters.WorkArea;
         ledges.Add(new Ledge(null, wa.Left, wa.Right, wa.Top));
 
+        _cache = ledges;
+        _cacheUtc = now;
         return ledges;
     }
 
