@@ -27,7 +27,8 @@ public partial class SettingsWindow : Window
     private readonly UpdateService? _updateService;
     private readonly Func<UpdateInfo, Task>? _promptAndApply;
     private readonly IReadOnlyList<PetCatalogEntry> _petCatalog;
-    private readonly string _originalSelectedPet;
+    private string _originalSelectedPet;
+    private readonly Func<string, Task>? _reloadPet;
     private bool _initializing = true;
     private bool _dirty;
     // Sticky: flips true on first user edit, never goes false again for the
@@ -59,7 +60,8 @@ public partial class SettingsWindow : Window
         IReadOnlyDictionary<string, PlayMode>? originalStatePlayMode = null,
         UpdateService? updateService = null,
         Func<UpdateInfo, Task>? promptAndApply = null,
-        IReadOnlyList<PetCatalogEntry>? petCatalog = null)
+        IReadOnlyList<PetCatalogEntry>? petCatalog = null,
+        Func<string, Task>? reloadPet = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -71,6 +73,7 @@ public partial class SettingsWindow : Window
         _promptAndApply = promptAndApply;
         _petCatalog = petCatalog ?? Array.Empty<PetCatalogEntry>();
         _originalSelectedPet = settings.SelectedPet;
+        _reloadPet = reloadPet;
 
         InitializeComponent();
 
@@ -449,14 +452,12 @@ public partial class SettingsWindow : Window
         _dirty = false;
         UpdateButtonState();
 
-        if (!string.Equals(_settings.SelectedPet, _originalSelectedPet, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(_settings.SelectedPet, _originalSelectedPet, StringComparison.OrdinalIgnoreCase)
+            && _reloadPet is not null)
         {
-            MessageBox.Show(
-                this,
-                "The pet change will take effect the next time you start HyperPet.",
-                "HyperPet",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            // Live-swap the pet; fire-and-forget on the UI dispatcher.
+            _ = _reloadPet(_settings.SelectedPet);
+            _originalSelectedPet = _settings.SelectedPet; // don't re-swap on next Apply
         }
 
         return true;

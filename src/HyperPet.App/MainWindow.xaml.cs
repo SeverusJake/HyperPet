@@ -29,18 +29,19 @@ public partial class MainWindow : Window
     private readonly Action? _applyMonitoringSettings;
     private readonly UpdateService? _updateService;
     private readonly IReadOnlyList<PetCatalogEntry> _petCatalog;
+    private readonly Func<string, Task<SpritePet?>>? _petLoader;
     private readonly IAppLauncher? _appLauncher;
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
     private readonly DispatcherTimer _movementTimer = new();
     private readonly DispatcherTimer _debugOverlayTimer = new();
     private readonly Random _random = new();
-    private readonly PetAnimator? _petAnimator;
-    private readonly SpritePet? _spritePet;
+    private PetAnimator? _petAnimator;
+    private SpritePet? _spritePet;
     private DesktopRoamController? _roamController;
     private string _lastRoamAnimation = string.Empty;
-    private readonly IReadOnlyDictionary<string, int>? _originalStateFps;
-    private readonly IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
+    private IReadOnlyDictionary<string, int>? _originalStateFps;
+    private IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
     private bool _movingRight = true;
     private bool _alertActive;
     private TimeSpan _debugPollInterval = TimeSpan.FromSeconds(30);
@@ -63,7 +64,8 @@ public partial class MainWindow : Window
         DebugNotificationSimulator? debugSimulator = null,
         Action? applyMonitoringSettings = null,
         UpdateService? updateService = null,
-        IReadOnlyList<PetCatalogEntry>? petCatalog = null)
+        IReadOnlyList<PetCatalogEntry>? petCatalog = null,
+        Func<string, Task<SpritePet?>>? petLoader = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -78,6 +80,7 @@ public partial class MainWindow : Window
         _applyMonitoringSettings = applyMonitoringSettings;
         _updateService = updateService;
         _petCatalog = petCatalog ?? Array.Empty<PetCatalogEntry>();
+        _petLoader = petLoader;
 
         InitializeComponent();
 
@@ -400,7 +403,8 @@ public partial class MainWindow : Window
             _originalStatePlayMode,
             _updateService,
             PromptAndApplyUpdateAsync,
-            _petCatalog)
+            _petCatalog,
+            ReloadPetAsync)
         {
             Owner = this
         };
@@ -425,6 +429,48 @@ public partial class MainWindow : Window
         StartBehaviorMode();
         ApplyDebugOverlayVisibility();
         _applyMonitoringSettings?.Invoke();
+    }
+
+    /// <summary>
+    /// Swaps the live pet to the given id without restarting. Keeps the
+    /// current pet on any failure. Called from the Settings dialog when the
+    /// user changes the pet selection.
+    /// </summary>
+    public async Task ReloadPetAsync(string petId)
+    {
+        if (_petLoader is null)
+        {
+            return;
+        }
+
+        try
+        {
+            SpritePet? pet = await _petLoader(petId);
+            if (pet is null)
+            {
+                return; // keep current pet
+            }
+
+            _originalStateFps = PetOverrides.SnapshotFps(pet);
+            _originalStatePlayMode = PetOverrides.SnapshotPlayMode(pet);
+            PetOverrides.Apply(pet, _settings);
+
+            StopBehaviorTimers();
+            _petAnimator?.Stop();
+
+            _spritePet = pet;
+            _petAnimator = new PetAnimator(pet, PetImage);
+            PetImage.Visibility = Visibility.Visible;
+
+            ApplyPetSize();
+            _roamController = null;          // rebuild against the new pet on next perch
+            _lastRoamAnimation = string.Empty;
+            StartBehaviorMode();
+        }
+        catch (Exception)
+        {
+            // Keep the current pet on failure.
+        }
     }
 
     /// <summary>
