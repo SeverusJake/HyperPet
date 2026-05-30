@@ -34,6 +34,9 @@ public sealed class PetAnimator
 
     public int FrameCount => _frames.Count;
 
+    /// <summary>FPS of the currently-playing state, or 1 when none.</summary>
+    public int CurrentFps => _state?.Fps ?? 1;
+
     public void Play(string stateName)
     {
         _timer.Stop();

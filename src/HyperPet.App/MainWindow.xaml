@@ -20,8 +20,7 @@
           MouseLeftButtonUp="OnGridMouseLeftButtonUp"
           MouseEnter="OnGridMouseEnter"
           MouseLeave="OnGridMouseLeave"
-          LostMouseCapture="OnGridLostMouseCapture"
-          Background="Transparent">
+          LostMouseCapture="OnGridLostMouseCapture">
         <Grid.ContextMenu>
             <ContextMenu>
                 <MenuItem x:Name="VersionMenuItem"

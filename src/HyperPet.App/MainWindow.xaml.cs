@@ -54,6 +54,13 @@ public partial class MainWindow : Window
     private double _calmLastX;
     private const double CalmDragThreshold = 4;
     private readonly DispatcherTimer _calmJumpTimer = new();
+    // Hover lifecycle: enforce a 2s minimum of "waiting", and after the
+    // mouse leaves, finish the current waiting cycle before going back to
+    // idle (so the animation reads as a complete pose, not a snap-cut).
+    private DateTime _hoverEnterUtc;
+    private bool _hoverActive;
+    private readonly DispatcherTimer _hoverExitTimer = new();
+    private static readonly TimeSpan HoverMinimum = TimeSpan.FromSeconds(2);
     private bool _alertActive;
     private TimeSpan _debugPollInterval = TimeSpan.FromSeconds(30);
     private DateTime _debugNextPollUtc = DateTime.UtcNow;
@@ -111,6 +118,7 @@ public partial class MainWindow : Window
         _alertTimer.Tick += (_, _) => DismissAlert();
         _calmTimer.Tick += OnCalmTimerTick;
         _calmJumpTimer.Tick += OnCalmJumpTimerTick;
+        _hoverExitTimer.Tick += OnHoverExitTimerTick;
         _movementTimer.Tick += OnMovementTimerTick;
         _debugOverlayTimer.Interval = TimeSpan.FromSeconds(1);
         _debugOverlayTimer.Tick += OnDebugOverlayTimerTick;
@@ -364,6 +372,7 @@ public partial class MainWindow : Window
             _calmPressTop = Top;
             _calmLastX = _calmPressScreen.X;
             _calmJumpTimer.Stop();
+            CancelHoverExit();
             StopBehaviorTimers();
             CaptureMouse();
             e.Handled = true;
@@ -465,18 +474,87 @@ public partial class MainWindow : Window
             return;
         }
 
-        StopBehaviorTimers();
-        _petAnimator?.Play("waiting");
+        // Cancel any pending "finish waiting then go idle" — we're hovering
+        // again, so keep playing waiting.
+        _hoverExitTimer.Stop();
+
+        if (!_hoverActive)
+        {
+            _hoverActive = true;
+            _hoverEnterUtc = DateTime.UtcNow;
+            StopBehaviorTimers();
+            _petAnimator?.Play("waiting");
+        }
     }
 
     private void OnGridMouseLeave(object sender, MouseEventArgs e)
     {
-        if (!IsCalmInteractive() || _calmPressed)
+        if (!IsCalmInteractive() || _calmPressed || !_hoverActive)
         {
             return;
         }
 
+        // Honor the 2s minimum: if we've waited at least 2s already, schedule
+        // the finish-current-cycle-then-idle transition immediately; otherwise
+        // delay until the 2s mark.
+        TimeSpan elapsed = DateTime.UtcNow - _hoverEnterUtc;
+        TimeSpan untilMin = HoverMinimum - elapsed;
+        TimeSpan delay = untilMin > TimeSpan.Zero ? untilMin : TimeSpan.FromMilliseconds(1);
+        _hoverExitTimer.Stop();
+        _hoverExitTimer.Interval = delay;
+        _hoverExitTimer.Tag = "wait-min";
+        _hoverExitTimer.Start();
+    }
+
+    private void OnHoverExitTimerTick(object? sender, EventArgs e)
+    {
+        _hoverExitTimer.Stop();
+
+        if (!IsCalmInteractive() || !_hoverActive)
+        {
+            _hoverActive = false;
+            return;
+        }
+
+        // First phase ("wait-min"): now schedule the second phase — let the
+        // current waiting cycle play to frame 8, then go idle.
+        if ((string?)_hoverExitTimer.Tag == "wait-min")
+        {
+            TimeSpan untilEnd = TimeUntilCycleEnd();
+            _hoverExitTimer.Interval = untilEnd > TimeSpan.Zero ? untilEnd : TimeSpan.FromMilliseconds(1);
+            _hoverExitTimer.Tag = "cycle-end";
+            _hoverExitTimer.Start();
+            return;
+        }
+
+        // Second phase: cycle is at frame 8 (or past) → idle + resume calm.
+        _hoverActive = false;
+        _hoverExitTimer.Tag = null;
         StartBehaviorMode();
+    }
+
+    private TimeSpan TimeUntilCycleEnd()
+    {
+        if (_petAnimator is not { } a || a.FrameCount <= 1 || a.CurrentFps <= 0)
+        {
+            return TimeSpan.Zero;
+        }
+
+        int remaining = a.FrameCount - 1 - a.FrameIndex;
+        if (remaining <= 0)
+        {
+            // Already at the last frame — give it one frame to land cleanly.
+            remaining = 1;
+        }
+
+        return TimeSpan.FromSeconds(remaining / (double)a.CurrentFps);
+    }
+
+    private void CancelHoverExit()
+    {
+        _hoverExitTimer.Stop();
+        _hoverExitTimer.Tag = null;
+        _hoverActive = false;
     }
 
     private void PlayIfChanged(string state)
@@ -489,6 +567,7 @@ public partial class MainWindow : Window
 
     private void PlayJumpThenIdle()
     {
+        CancelHoverExit();
         _petAnimator?.Play("jumping");
         _calmJumpTimer.Stop();
         _calmJumpTimer.Interval = JumpDuration();
