@@ -15,7 +15,8 @@
         WindowStyle="None"
         Focusable="True"
         KeyDown="OnWindowKeyDown">
-    <Grid MouseLeftButtonDown="OnMouseLeftButtonDown"
+    <Grid x:Name="RootGrid"
+          MouseLeftButtonDown="OnMouseLeftButtonDown"
           MouseMove="OnGridMouseMove"
           MouseLeftButtonUp="OnGridMouseLeftButtonUp"
           MouseEnter="OnGridMouseEnter"

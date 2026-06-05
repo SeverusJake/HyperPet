@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -54,6 +55,11 @@ public partial class MainWindow : Window
     private double _calmLastX;
     private const double CalmDragThreshold = 4;
     private readonly DispatcherTimer _calmJumpTimer = new();
+    // Click-vs-hold timing: a quick press+release on the pet is a click (jump);
+    // holding past CalmHoldThreshold enters drag mode (window follows cursor).
+    private static readonly TimeSpan CalmHoldThreshold = TimeSpan.FromMilliseconds(100);
+    private readonly DispatcherTimer _calmHoldTimer = new();
+    private bool _calmHolding;
     // Hover lifecycle: enforce a 2s minimum of "waiting", and after the
     // mouse leaves, finish the current waiting cycle before going back to
     // idle (so the animation reads as a complete pose, not a snap-cut).
@@ -118,6 +124,7 @@ public partial class MainWindow : Window
         _alertTimer.Tick += (_, _) => DismissAlert();
         _calmTimer.Tick += OnCalmTimerTick;
         _calmJumpTimer.Tick += OnCalmJumpTimerTick;
+        _calmHoldTimer.Tick += OnCalmHoldTimerTick;
         _hoverExitTimer.Tick += OnHoverExitTimerTick;
         _movementTimer.Tick += OnMovementTimerTick;
         _debugOverlayTimer.Interval = TimeSpan.FromSeconds(1);
@@ -365,16 +372,27 @@ public partial class MainWindow : Window
         // (jump) from a drag (run). Other modes keep the simple DragMove path.
         if (IsCalmInteractive())
         {
+            DebugInteraction("click down");
+            // Calm: defer the decision. Down records state and starts a hold
+            // timer. Quick release on the pet => click => jump. Holding past
+            // the threshold => drag (manual move, with run L/R animation).
             _calmPressed = true;
             _calmDragging = false;
+            _calmHolding = false;
             _calmPressScreen = PointToScreen(e.GetPosition(this));
             _calmPressLeft = Left;
             _calmPressTop = Top;
             _calmLastX = _calmPressScreen.X;
+
             _calmJumpTimer.Stop();
             CancelHoverExit();
             StopBehaviorTimers();
-            CaptureMouse();
+            RootGrid.CaptureMouse();
+
+            _calmHoldTimer.Stop();
+            _calmHoldTimer.Interval = CalmHoldThreshold;
+            _calmHoldTimer.Start();
+
             e.Handled = true;
             return;
         }
@@ -401,36 +419,34 @@ public partial class MainWindow : Window
 
     private void OnGridMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_calmPressed)
+        if (!_calmPressed || !_calmHolding)
         {
+            // Not pressed at all, or still inside the click window: no drag.
             return;
         }
 
         System.Windows.Point cur = PointToScreen(e.GetPosition(this));
-        double dxTotal = cur.X - _calmPressScreen.X;
-        double dyTotal = cur.Y - _calmPressScreen.Y;
+        DpiScale dpi = VisualTreeHelper.GetDpi(this);
+        // PointToScreen returns physical pixels; Window.Left/Top are DIPs.
+        // Convert the delta back to DIPs so the pet matches cursor speed on
+        // high-DPI displays.
+        double dxTotal = (cur.X - _calmPressScreen.X) / dpi.DpiScaleX;
+        double dyTotal = (cur.Y - _calmPressScreen.Y) / dpi.DpiScaleY;
 
-        if (!_calmDragging && Math.Abs(dxTotal) + Math.Abs(dyTotal) > CalmDragThreshold)
+        _calmDragging = true;
+        Left = _calmPressLeft + dxTotal;
+        Top = _calmPressTop + dyTotal;
+
+        if (cur.X > _calmLastX + 0.5)
         {
-            _calmDragging = true;
+            PlayIfChanged("runRight");
+        }
+        else if (cur.X < _calmLastX - 0.5)
+        {
+            PlayIfChanged("runLeft");
         }
 
-        if (_calmDragging)
-        {
-            Left = _calmPressLeft + dxTotal;
-            Top = _calmPressTop + dyTotal;
-
-            if (cur.X > _calmLastX + 0.5)
-            {
-                PlayIfChanged("runRight");
-            }
-            else if (cur.X < _calmLastX - 0.5)
-            {
-                PlayIfChanged("runLeft");
-            }
-
-            _calmLastX = cur.X;
-        }
+        _calmLastX = cur.X;
     }
 
     private void OnGridMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -440,18 +456,32 @@ public partial class MainWindow : Window
             return;
         }
 
-        ReleaseMouseCapture();
-        bool wasDragging = _calmDragging;
+        _calmHoldTimer.Stop();
+        RootGrid.ReleaseMouseCapture();
+
+        bool wasHolding = _calmHolding;
         _calmPressed = false;
         _calmDragging = false;
+        _calmHolding = false;
 
-        if (wasDragging)
+        DebugInteraction(wasHolding ? "release (drag end)" : "release (click)");
+
+        if (wasHolding)
         {
+            // End of hold/drag: back to calm idle.
             StartBehaviorMode();
+            return;
+        }
+
+        // Click path (released before hold threshold). Only fire jump when the
+        // mouse is still over the sprite at release.
+        if (IsOverPet(e.GetPosition(PetImage)))
+        {
+            PlayJumpThenIdle();
         }
         else
         {
-            PlayJumpThenIdle();
+            StartBehaviorMode();
         }
     }
 
@@ -462,13 +492,49 @@ public partial class MainWindow : Window
             return;
         }
 
+        DebugInteraction("capture lost");
+        _calmHoldTimer.Stop();
         _calmPressed = false;
         _calmDragging = false;
+        _calmHolding = false;
         StartBehaviorMode();
+    }
+
+    private void OnCalmHoldTimerTick(object? sender, EventArgs e)
+    {
+        _calmHoldTimer.Stop();
+
+        // Press has been held past the click window — enter drag mode. The
+        // window will follow the cursor from the next MouseMove.
+        if (_calmPressed)
+        {
+            _calmHolding = true;
+            DebugInteraction("hold (drag start)");
+        }
+    }
+
+    private void DebugInteraction(string tag)
+    {
+        Debug.WriteLine($"[hyperpet] {tag}");
+        ReportPollStatus(tag);
+    }
+
+    private bool IsOverPet(System.Windows.Point ptInPetImage)
+    {
+        if (PetImage is null || PetImage.ActualWidth <= 0 || PetImage.ActualHeight <= 0)
+        {
+            return false;
+        }
+
+        return ptInPetImage.X >= 0
+            && ptInPetImage.Y >= 0
+            && ptInPetImage.X < PetImage.ActualWidth
+            && ptInPetImage.Y < PetImage.ActualHeight;
     }
 
     private void OnGridMouseEnter(object sender, MouseEventArgs e)
     {
+        DebugInteraction("hover enter");
         if (!IsCalmInteractive() || _calmPressed)
         {
             return;
@@ -489,6 +555,7 @@ public partial class MainWindow : Window
 
     private void OnGridMouseLeave(object sender, MouseEventArgs e)
     {
+        DebugInteraction("hover leave");
         if (!IsCalmInteractive() || _calmPressed || !_hoverActive)
         {
             return;
