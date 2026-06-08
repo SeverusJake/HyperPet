@@ -193,8 +193,8 @@ public sealed class PetAnimator
 
         if (step.Completed && !_state.Loop)
         {
-            _frameIndex = step.Index;
-            _direction = step.Direction;
+            // Non-looping state finished: hold on the current (last displayed)
+            // frame, matching the previous behavior across all play modes.
             return true;
         }
 
