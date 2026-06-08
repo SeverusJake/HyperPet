@@ -37,6 +37,14 @@ public sealed class PetAnimator
     /// <summary>FPS of the currently-playing state, or 1 when none.</summary>
     public int CurrentFps => _state?.Fps ?? 1;
 
+    /// <summary>
+    /// Raised once when a non-looping state reaches its natural end. The
+    /// argument is the finished state name. Never raised for looping states.
+    /// Handlers may call <see cref="Play"/> safely (fired after the frame is
+    /// rendered, as the last action of the tick).
+    /// </summary>
+    public event Action<string>? Completed;
+
     public void Play(string stateName)
     {
         _timer.Stop();
@@ -156,82 +164,54 @@ public sealed class PetAnimator
             return;
         }
 
-        AdvanceFrame();
-        _image.Source = _frames[_frameIndex];
+        bool completed = AdvanceFrame();
+
+        if (_frames.Count > 0)
+        {
+            _image.Source = _frames[_frameIndex];
+        }
+
+        if (completed)
+        {
+            string finished = StateName;
+            _timer.Stop();
+            Completed?.Invoke(finished);
+        }
     }
 
-    private void AdvanceFrame()
+    /// <summary>Advances one frame. Returns true when a non-looping state has
+    /// reached its natural end (caller stops the timer and raises Completed).</summary>
+    private bool AdvanceFrame()
     {
         if (_state is null)
         {
-            return;
+            return false;
         }
 
-        int last = _frames.Count - 1;
+        PlaybackResult step = PlaybackStep.Next(
+            _state.PlayMode, _frameIndex, _direction, _frames.Count);
 
-        switch (_state.PlayMode)
+        if (step.Completed && !_state.Loop)
         {
-            case PlayMode.Reverse:
-                if (_frameIndex <= 0)
-                {
-                    if (!_state.Loop)
-                    {
-                        _timer.Stop();
-                        return;
-                    }
-                    _frameIndex = last;
-                }
-                else
-                {
-                    _frameIndex--;
-                }
-                break;
-
-            case PlayMode.PingPong:
-                int next = _frameIndex + _direction;
-                if (next > last)
-                {
-                    // Hit the end going forward; flip direction and step back.
-                    if (!_state.Loop)
-                    {
-                        _timer.Stop();
-                        return;
-                    }
-                    _direction = -1;
-                    _frameIndex = Math.Max(0, last - 1);
-                }
-                else if (next < 0)
-                {
-                    if (!_state.Loop)
-                    {
-                        _timer.Stop();
-                        return;
-                    }
-                    _direction = 1;
-                    _frameIndex = Math.Min(last, 1);
-                }
-                else
-                {
-                    _frameIndex = next;
-                }
-                break;
-
-            case PlayMode.Forward:
-            default:
-                if (_frameIndex >= last)
-                {
-                    if (!_state.Loop)
-                    {
-                        _timer.Stop();
-                        return;
-                    }
-                    _frameIndex = 0;
-                }
-                else
-                {
-                    _frameIndex++;
-                }
-                break;
+            _frameIndex = step.Index;
+            _direction = step.Direction;
+            return true;
         }
+
+        if (step.Completed && _state.Loop)
+        {
+            _frameIndex = _state.PlayMode switch
+            {
+                PlayMode.Reverse => _frames.Count - 1,
+                PlayMode.PingPong => step.Index,
+                _ => 0,
+            };
+            _direction = step.Direction;
+            return false;
+        }
+
+        _frameIndex = step.Index;
+        _direction = step.Direction;
+        return false;
     }
 }
