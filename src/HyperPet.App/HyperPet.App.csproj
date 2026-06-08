@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>HyperPet</AssemblyName>
     <Product>HyperPet</Product>
     <ApplicationIcon>Assets\HyperPet.ico</ApplicationIcon>
@@ -14,6 +15,14 @@
     <FileVersion>0.5.3.0</FileVersion>
     <InformationalVersion>0.5.3</InformationalVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- UseWindowsForms=true (needed for System.Windows.Forms.Cursor in Summon)
+         injects these implicit global usings, which collide with WPF and
+         ImageSharp types. Remove them to restore the pre-WinForms using set;
+         the WinForms assembly reference itself stays. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HyperPet.Core\HyperPet.Core.csproj" />
     <ProjectReference Include="..\HyperPet.Windows\HyperPet.Windows.csproj" />

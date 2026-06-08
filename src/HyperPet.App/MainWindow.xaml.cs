@@ -43,6 +43,10 @@ public partial class MainWindow : Window
     private PetAnimator? _petAnimator;
     private SpritePet? _spritePet;
     private DesktopRoamController? _roamController;
+    private SummonController? _summonController;
+    private bool _summoned;
+    private bool _summonWalking;   // true while walking to center (movement ticking)
+    private bool _tuckingAway;     // true after Tuck Away requested, awaiting "failed" end
     private string _lastRoamAnimation = string.Empty;
     private IReadOnlyDictionary<string, int>? _originalStateFps;
     private IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
@@ -144,6 +148,7 @@ public partial class MainWindow : Window
         }
 
         _petAnimator = new PetAnimator(spritePet, PetImage);
+        _petAnimator.Completed += OnPetAnimationCompleted;
         ApplyPetSize();
         StartBehaviorMode();
     }
@@ -285,6 +290,12 @@ public partial class MainWindow : Window
 
     private void OnMovementTimerTick(object? sender, EventArgs e)
     {
+        if (_summonWalking)
+        {
+            SummonTick();
+            return;
+        }
+
         if (_settings.PetBehaviorMode == PetBehaviorMode.Desktop)
         {
             RoamTick();
@@ -325,6 +336,48 @@ public partial class MainWindow : Window
         {
             _lastRoamAnimation = _roamController.CurrentAnimation;
             _petAnimator?.Play(_lastRoamAnimation);
+        }
+    }
+
+    private void OnPetAnimationCompleted(string finishedState)
+    {
+        if (_tuckingAway && finishedState == "failed")
+        {
+            _tuckingAway = false;
+            Application.Current.Shutdown();
+            return;
+        }
+
+        if (_summoned && finishedState == "jumping")
+        {
+            // Arrived + jumped: settle into a looping wave until the user hovers.
+            _petAnimator?.Play("waving");
+        }
+    }
+
+    private void SummonTick()
+    {
+        if (_summonController is null)
+        {
+            _summonWalking = false;
+            return;
+        }
+
+        _summonController.Tick();
+        Left = _summonController.X;
+        Top = _summonController.Y;
+
+        if (_summonController.CurrentAnimation != _lastRoamAnimation)
+        {
+            _lastRoamAnimation = _summonController.CurrentAnimation;
+            _petAnimator?.Play(_lastRoamAnimation);
+        }
+
+        if (_summonController.Arrived)
+        {
+            _summonWalking = false;
+            _movementTimer.Stop();
+            _petAnimator?.Play("jumping"); // in place; OnPetAnimationCompleted -> waving
         }
     }
 
@@ -535,6 +588,17 @@ public partial class MainWindow : Window
     private void OnGridMouseEnter(object sender, MouseEventArgs e)
     {
         DebugInteraction("hover enter");
+        if (_summoned)
+        {
+            // End the summon: return to the configured behavior on hover,
+            // regardless of mode, skipping the normal 2s waiting lifecycle.
+            _summoned = false;
+            _summonWalking = false;
+            _movementTimer.Stop();
+            StartBehaviorMode();
+            return;
+        }
+
         if (!IsCalmInteractive() || _calmPressed)
         {
             return;
@@ -701,6 +765,75 @@ public partial class MainWindow : Window
         _saveSettings();
     }
 
+    /// <summary>Tray "Come": run to the center of the cursor's monitor, jump on
+    /// arrival, then wave (looping) until the user hovers the pet.</summary>
+    public void Summon()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(Summon);
+            return;
+        }
+
+        if (_petAnimator is null || _alertActive)
+        {
+            return;
+        }
+
+        StopBehaviorTimers();
+        _hoverActive = false;
+
+        double petW = GetWindowWidth();
+        double petH = GetWindowHeight();
+
+        DpiScale dpi = VisualTreeHelper.GetDpi(this);
+        var cursor = System.Windows.Forms.Cursor.Position; // physical px
+        double cursorDipX = cursor.X / dpi.DpiScaleX;
+        double cursorDipY = cursor.Y / dpi.DpiScaleY;
+
+        WorkArea? monitor = MonitorWorkArea.ForPoint(
+            cursorDipX, cursorDipY, dpi.DpiScaleX, dpi.DpiScaleY);
+        Rect primary = SystemParameters.WorkArea;
+        WorkArea wa = monitor ?? new WorkArea(primary.Left, primary.Top, primary.Right, primary.Bottom);
+
+        double targetX = wa.Left + ((wa.Right - wa.Left) - petW) / 2.0;
+        double targetY = wa.Top + ((wa.Bottom - wa.Top) - petH) / 2.0;
+
+        _summonController ??= new SummonController();
+        _summonController.WalkSpeed = Math.Clamp(_settings.RunningSpeed, 1, 20);
+        _summonController.Start(Left, Top, targetX, targetY);
+
+        _summoned = true;
+        _summonWalking = true;
+        _lastRoamAnimation = string.Empty;
+
+        _movementTimer.Interval = TimeSpan.FromMilliseconds(33);
+        _movementTimer.Start();
+    }
+
+    /// <summary>Tray "Tuck Away": play the failed animation, then quit.</summary>
+    public void TuckAway()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(TuckAway);
+            return;
+        }
+
+        StopBehaviorTimers();
+        _summoned = false;
+        _summonWalking = false;
+
+        if (_petAnimator is null)
+        {
+            Application.Current.Shutdown();
+            return;
+        }
+
+        _tuckingAway = true;
+        _petAnimator.Play("failed"); // OnPetAnimationCompleted -> Shutdown
+    }
+
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
         var settingsWindow = new SettingsWindow(
@@ -787,6 +920,7 @@ public partial class MainWindow : Window
 
             _spritePet = pet;
             _petAnimator = new PetAnimator(pet, PetImage);
+            _petAnimator.Completed += OnPetAnimationCompleted;
             PetImage.Visibility = Visibility.Visible;
 
             ApplyPetSize();
