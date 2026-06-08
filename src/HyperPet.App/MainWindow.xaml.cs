@@ -834,8 +834,18 @@ public partial class MainWindow : Window
         _petAnimator.Play("failed"); // OnPetAnimationCompleted -> Shutdown
     }
 
-    private void OnSettingsClick(object sender, RoutedEventArgs e)
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
+
+    /// <summary>Opens the Settings dialog on the pet's monitor. Used by the pet
+    /// context menu and the tray menu.</summary>
+    public void OpenSettings()
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(OpenSettings);
+            return;
+        }
+
         var settingsWindow = new SettingsWindow(
             _settings,
             _applyStartupSetting,
@@ -1151,6 +1161,40 @@ public partial class MainWindow : Window
                 "HyperPet Update",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>Manual update check from the tray. Reports outcome via the
+    /// supplied notify callback (tray balloon). Manual checks surface errors,
+    /// unlike the silent launch check.</summary>
+    public async Task CheckForUpdateFromTray(Action<string> notify)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            await Dispatcher.InvokeAsync(() => CheckForUpdateFromTray(notify)).Task.Unwrap();
+            return;
+        }
+
+        if (_updateService is null || !_updateService.IsSupported)
+        {
+            notify("Updates are not available in this build.");
+            return;
+        }
+
+        try
+        {
+            UpdateInfo? info = await _updateService.CheckAsync();
+            if (info is null)
+            {
+                notify("HyperPet is up to date.");
+                return;
+            }
+
+            await PromptAndApplyUpdateAsync(info);
+        }
+        catch (Exception)
+        {
+            notify("Could not check for updates. Check your connection and try again.");
         }
     }
 
