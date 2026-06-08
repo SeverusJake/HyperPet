@@ -140,7 +140,7 @@ public partial class App : Application
         _mainWindow.Show();
 
         _trayIcon = new TrayIcon(
-            $"HyperPet {AppVersion.DisplayString}",
+            AppVersion.DisplayString,
             onCome: () => _mainWindow!.Summon(),
             onSettings: () => _mainWindow!.OpenSettings(),
             onCheckForUpdate: () => _ = _mainWindow!.CheckForUpdateFromTray(msg => _trayIcon?.Notify(msg)),
