@@ -26,6 +26,7 @@ public partial class App : Application
     private SettingsStore? _settingsStore;
     private HyperPetSettings? _settings;
     private MainWindow? _mainWindow;
+    private TrayIcon? _trayIcon;
     private DispatcherTimer? _monitorTimer;
     private bool _monitorIterationRunning;
     private INotificationListener? _notificationListener;
@@ -138,6 +139,13 @@ public partial class App : Application
         _mainWindow.ClampToWorkArea();
         _mainWindow.Show();
 
+        _trayIcon = new TrayIcon(
+            $"HyperPet {AppVersion.DisplayString}",
+            onCome: () => _mainWindow!.Summon(),
+            onSettings: () => _mainWindow!.OpenSettings(),
+            onCheckForUpdate: () => _ = _mainWindow!.CheckForUpdateFromTray(msg => _trayIcon?.Notify(msg)),
+            onTuckAway: () => _mainWindow!.TuckAway());
+
         if (settingsLoadException is not null)
         {
             MessageBox.Show(
@@ -178,6 +186,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _logger?.Info("Session exit requested");
+        _trayIcon?.Dispose();
         _monitorTimer?.Stop();
         _inAppWatcher?.Dispose();
         _notificationListener?.StopListening();

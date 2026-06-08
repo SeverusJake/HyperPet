@@ -39,6 +39,7 @@
     <Content Include="Assets\Pets\**\*.*" CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="Assets\Package\*.png" />
     <Resource Include="Assets\HyperPet.ico" />
+    <None Include="Assets\HyperPet.ico" Link="Assets\HyperPet.ico" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Package.appxmanifest" />
   </ItemGroup>
   <ItemGroup>
