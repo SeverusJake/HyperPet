@@ -73,11 +73,6 @@
                                        Text="If the selected monitor is disconnected, the pet moves to an available monitor." />
                         </StackPanel>
 
-                        <CheckBox x:Name="OpenAppOnBubbleClickCheckBox"
-                                  Margin="0,8,0,0"
-                                  Content="Click bubble to open app"
-                                  IsChecked="True" />
-
                         <CheckBox x:Name="ReactToWindowsNotificationsCheckBox"
                                   Margin="0,12,0,0"
                                   Content="React to Windows notifications" />

@@ -35,7 +35,6 @@ public partial class MainWindow : Window
     private readonly Func<string, Task<SpritePet?>>? _petLoader;
     private readonly string _userPetsRoot;
     private readonly Func<Task<IReadOnlyList<PetCatalogEntry>>>? _rediscoverPets;
-    private readonly IAppLauncher? _appLauncher;
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
     private readonly DispatcherTimer _movementTimer = new();
@@ -110,7 +109,6 @@ public partial class MainWindow : Window
         _spritePet = spritePet;
         _originalStateFps = originalStateFps;
         _originalStatePlayMode = originalStatePlayMode;
-        _appLauncher = appLauncher;
         _setPollInterval = setPollInterval;
         _pollSoon = pollSoon;
         _debugSimulator = debugSimulator;
@@ -122,6 +120,7 @@ public partial class MainWindow : Window
         _rediscoverPets = rediscoverPets;
 
         InitializeComponent();
+        InitializeNotificationWindow();
 
         PauseAlertsMenuItem.IsChecked = settings.AlertsPaused;
         VersionMenuItem.Header = AppVersion.DisplayString;
@@ -138,6 +137,7 @@ public partial class MainWindow : Window
         _tuckAwayTimer.Tick += (_, _) => FinishTuckAway();
         Closed += (_, _) =>
         {
+            CloseNotificationWindow();
             StopMonitorTracking();
             _historyWindow?.Close();
             _notificationInbox.Changed -= OnInboxChanged;
@@ -162,6 +162,7 @@ public partial class MainWindow : Window
         {
             StartMonitorTracking();
             RestorePetPosition();
+            UpdateNotificationPlacement();
             StartBehaviorMode();
             ApplyDebugOverlayVisibility();
             _ = MaybeAutoCheckForUpdateAsync();
@@ -711,29 +712,18 @@ public partial class MainWindow : Window
 
     private void OnBubbleMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ClickCount == 2)
+        for (var source = e.OriginalSource as DependencyObject; source is not null && source != Bubble;
+             source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source))
+        {
+            if (source is System.Windows.Controls.Primitives.ButtonBase
+                or System.Windows.Controls.Primitives.ScrollBar) { return; }
+        }
+        // The second press of a double-click must not skip another alert.
+        if (e.ClickCount < 2)
         {
             DismissAlert();
-            e.Handled = true;
-            return;
         }
-
-        if (!_settings.OpenAppOnBubbleClick || _appLauncher is null)
-        {
-            return;
-        }
-
-        var alert = _viewModel.CurrentAlert;
-        if (alert is null || string.IsNullOrWhiteSpace(alert.AppUserModelId))
-        {
-            return;
-        }
-
-        if (_appLauncher.TryLaunch(alert.AppUserModelId))
-        {
-            DismissAlert();
-            e.Handled = true;
-        }
+        e.Handled = true;
     }
 
     private void OnPauseAlertsClick(object sender, RoutedEventArgs e)

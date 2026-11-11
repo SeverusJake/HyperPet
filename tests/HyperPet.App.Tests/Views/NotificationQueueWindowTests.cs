@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -15,7 +16,7 @@ namespace HyperPet.App.Tests.Views;
 public sealed class NotificationQueueWindowTests
 {
     [Fact]
-    public Task NextButton_ReceivesPointerHit_AboveVisiblePet() => StaThread.RunAsync(() =>
+    public Task HistoryIcon_ReceivesPointerHit_AboveVisiblePet() => StaThread.RunAsync(() =>
     {
         var bitmap = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[] { 0, 0, 255, 255 }, 4);
         bitmap.Freeze();
@@ -36,12 +37,57 @@ public sealed class NotificationQueueWindowTests
             window.ShowAlert(Alert("Short"));
             window.UpdateLayout();
             window.Dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
-            var button = (Button)window.FindName("NextAlertButton");
-            var root = (Grid)window.FindName("RootGrid");
+            var button = Assert.IsType<Button>(window.FindName("HistoryAlertButton"));
+            var root = (Border)window.FindName("Bubble");
             var point = button.TranslatePoint(new Point(button.ActualWidth / 2, button.ActualHeight / 2), root);
             var hit = root.InputHitTest(point) as DependencyObject;
             while (hit is not null && hit is not Button) { hit = VisualTreeHelper.GetParent(hit); }
             Assert.Same(button, hit);
+        }
+        finally { window.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task BubbleSingleClick_AdvancesThenCloses_WhenQueueIsEmpty(bool legacyOpenApp) => StaThread.RunAsync(() =>
+    {
+        var window = new MainWindow(new HyperPetSettings { OpenAppOnBubbleClick = legacyOpenApp }, _ => { }, () => { }, null);
+        try
+        {
+            window.ShowAlert(Alert("First"));
+            window.ShowAlert(Alert("Second"));
+            var bubble = (Border)window.FindName("Bubble");
+            bubble.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = UIElement.MouseLeftButtonDownEvent
+            });
+            Assert.Equal("Second", ((TextBlock)window.FindName("BubbleTitle")).Text);
+            Assert.Equal(Visibility.Visible, bubble.Visibility);
+            bubble.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = UIElement.MouseLeftButtonDownEvent
+            });
+            Assert.Equal(Visibility.Collapsed, bubble.Visibility);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public Task HistoryIcon_OpensHistory_WithoutAdvancingNotification() => StaThread.RunAsync(() =>
+    {
+        var window = new MainWindow(new HyperPetSettings(), _ => { }, () => { }, null);
+        try
+        {
+            window.Show();
+            window.ShowAlert(Alert("First"));
+            window.ShowAlert(Alert("Second"));
+            var button = Assert.IsType<Button>(window.FindName("HistoryAlertButton"));
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(window.OwnedWindows.Cast<Window>().OfType<HyperPet.App.Views.HistoryWindow>());
+            Assert.Equal("First", ((TextBlock)window.FindName("BubbleTitle")).Text);
+            window.DismissAlert();
+            Assert.Equal("Second", ((TextBlock)window.FindName("BubbleTitle")).Text);
         }
         finally { window.Close(); }
     });

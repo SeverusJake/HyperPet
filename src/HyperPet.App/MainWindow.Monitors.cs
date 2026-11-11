@@ -66,6 +66,7 @@ public partial class MainWindow
         if (_tuckingAway) { return; }
         _monitors = _monitorProvider();
         ClampToWorkArea();
+        UpdateNotificationPlacement();
         _roamController = null;
         _summoned = false;
         _summonWalking = false;

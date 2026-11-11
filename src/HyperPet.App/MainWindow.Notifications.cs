@@ -40,12 +40,13 @@ public partial class MainWindow
         UpdateDebugOverlay();
         UpdateBubbleContent(alert);
         Bubble.Visibility = Visibility.Visible;
+        UpdateNotificationPlacement();
         StopBehaviorTimers();
         StopInteractionTimers();
         _petAnimator?.Play("waving");
         _alertTimer.Stop();
         _alertTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(_settings.AlertDurationSeconds, 1, 600));
-        _alertTimer.Start();
+        if (!_bubbleHovered) { _alertTimer.Start(); }
     }
 
     private void UpdateBubbleContent(PetAlert alert)
@@ -54,6 +55,8 @@ public partial class MainWindow
         BubbleAppName.Text = alert.AppName;
         BubbleTitle.Text = alert.Title;
         BubbleBody.Text = alert.Body;
+        BubbleContentScrollViewer.ScrollToTop();
+        UpdateNotificationPlacement();
     }
 
     public void DismissAlert()
@@ -69,6 +72,7 @@ public partial class MainWindow
         _viewModel.CurrentAlert = null;
         _alertActive = false;
         Bubble.Visibility = Visibility.Collapsed;
+        HideNotificationWindow();
         BubbleAppName.Text = string.Empty;
         BubbleTitle.Text = string.Empty;
         BubbleBody.Text = string.Empty;
@@ -78,7 +82,9 @@ public partial class MainWindow
     private void OnInboxChanged(object? sender, EventArgs e)
     {
         PendingAlertsText.Text = _notificationInbox.PendingCount > 0 ? $"Queued: {_notificationInbox.PendingCount}" : string.Empty;
-        NextAlertButton.Content = _notificationInbox.PendingCount > 0 ? "Next" : "Dismiss";
+        PendingAlertsText.Visibility = _notificationInbox.PendingCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+        Bubble.ToolTip = _notificationInbox.PendingCount > 0 ? "Click for next notification" : "Click to dismiss";
+        UpdateNotificationPlacement();
     }
 
     internal void RefreshNotificationPreferences()
@@ -107,16 +113,10 @@ public partial class MainWindow
         }
         _historyWindow = new HistoryWindow(_notificationInbox, alert => QueueAlert(alert, recordHistory: false))
         {
-            Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner
+            Owner = this, Topmost = true, WindowStartupLocation = WindowStartupLocation.CenterOwner
         };
         _historyWindow.Closed += (_, _) => _historyWindow = null;
         _historyWindow.Show();
-    }
-
-    private void OnNextAlertClick(object sender, RoutedEventArgs e)
-    {
-        DismissAlert();
-        e.Handled = true;
     }
 
     private void OnHistoryClick(object sender, RoutedEventArgs e)

@@ -44,7 +44,6 @@ public partial class SettingsWindow : Window
     // the dialog to a known clean state. These mirror HyperPetSettings.CreateDefault().
     private const bool DefaultShowFullContent = true;
     private const bool DefaultStartWithWindows = true;
-    private const bool DefaultOpenAppOnBubbleClick = true;
     private const bool DefaultReactToWindowsNotifications = true;
     private const bool DefaultReactToInAppNotifications = true;
     private const PetBehaviorMode DefaultPetBehaviorMode = PetBehaviorMode.Calm;
@@ -89,7 +88,6 @@ public partial class SettingsWindow : Window
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
         RememberPetPositionCheckBox.IsChecked = settings.RememberPetPosition;
         RefreshMonitors(settings.PreferredMonitorId);
-        OpenAppOnBubbleClickCheckBox.IsChecked = settings.OpenAppOnBubbleClick;
         ReactToWindowsNotificationsCheckBox.IsChecked = settings.ReactToWindowsNotifications;
         ReactToInAppNotificationsCheckBox.IsChecked = settings.ReactToInAppNotifications;
         DebugModeCheckBox.IsChecked = settings.DebugMode;
@@ -172,7 +170,6 @@ public partial class SettingsWindow : Window
         ShowFullContentCheckBox.Click += OnAnyChange;
         StartWithWindowsCheckBox.Click += OnAnyChange;
         RememberPetPositionCheckBox.Click += OnAnyChange;
-        OpenAppOnBubbleClickCheckBox.Click += OnAnyChange;
         ReactToWindowsNotificationsCheckBox.Click += OnAnyChange;
         ReactToInAppNotificationsCheckBox.Click += OnAnyChange;
         DebugModeCheckBox.Click += OnAnyChange;
@@ -507,7 +504,6 @@ public partial class SettingsWindow : Window
         StartWithWindowsCheckBox.IsChecked = DefaultStartWithWindows;
         RememberPetPositionCheckBox.IsChecked = true;
         MonitorPickerComboBox.SelectedValue = string.Empty;
-        OpenAppOnBubbleClickCheckBox.IsChecked = DefaultOpenAppOnBubbleClick;
         ReactToWindowsNotificationsCheckBox.IsChecked = DefaultReactToWindowsNotifications;
         ReactToInAppNotificationsCheckBox.IsChecked = DefaultReactToInAppNotifications;
         DebugModeCheckBox.IsChecked = DefaultDebugMode;
@@ -567,7 +563,7 @@ public partial class SettingsWindow : Window
             requestedPetBehaviorMode,
             alertDuration,
             requestedStartWithWindows,
-            OpenAppOnBubbleClickCheckBox.IsChecked == true,
+            _settings.OpenAppOnBubbleClick, // Preserve legacy setting; bubble clicks now always advance.
             ReactToWindowsNotificationsCheckBox.IsChecked == true,
             ReactToInAppNotificationsCheckBox.IsChecked == true,
             windowsInterval,

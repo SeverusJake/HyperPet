@@ -42,7 +42,8 @@
 
         <Border x:Name="Bubble"
                 Panel.ZIndex="1"
-                Width="250"
+                Width="280"
+                MaxHeight="420"
                 Padding="14"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Top"
@@ -51,35 +52,56 @@
                 BorderThickness="1"
                 CornerRadius="8"
                 Cursor="Hand"
-                MouseLeftButtonDown="OnBubbleMouseLeftButtonDown"
                 Visibility="Collapsed">
-            <StackPanel>
-                <TextBlock x:Name="BubbleAppName"
-                           FontSize="12"
-                           FontWeight="SemiBold"
-                           Foreground="#555555"
-                           TextTrimming="CharacterEllipsis" />
-                <TextBlock x:Name="BubbleTitle"
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="BubbleAppName"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Foreground="#555555"
+                               TextTrimming="CharacterEllipsis" />
+                    <Button x:Name="HistoryAlertButton"
+                            Grid.Column="1"
+                            Width="22" Height="22" Padding="0"
+                            Background="Transparent" BorderThickness="0"
+                            Foreground="#555555"
+                            ToolTip="Notification history"
+                            AutomationProperties.Name="Notification history"
+                            Click="OnHistoryClick">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="12" Text="&#xE81C;" />
+                    </Button>
+                </Grid>
+                <ScrollViewer x:Name="BubbleContentScrollViewer" Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              PanningMode="VerticalOnly">
+                    <StackPanel>
+                        <TextBlock x:Name="BubbleTitle"
                            Margin="0,4,0,0"
                            FontSize="16"
                            FontWeight="Bold"
                            Foreground="#111111"
                            TextWrapping="Wrap" />
-                <TextBlock x:Name="BubbleBody"
+                        <TextBlock x:Name="BubbleBody"
                            Margin="0,6,0,0"
                            FontSize="13"
                            Foreground="#333333"
-                           MaxHeight="72"
-                           TextTrimming="CharacterEllipsis"
                            TextWrapping="Wrap" />
-                <DockPanel Margin="0,8,0,0">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button x:Name="NextAlertButton" Content="Next" Padding="6,2" Click="OnNextAlertClick" />
-                        <Button Content="History" Margin="6,0,0,0" Padding="6,2" Click="OnHistoryClick" />
                     </StackPanel>
-                    <TextBlock x:Name="PendingAlertsText" VerticalAlignment="Center" FontSize="11" />
-                </DockPanel>
-            </StackPanel>
+                </ScrollViewer>
+                <TextBlock x:Name="PendingAlertsText" Grid.Row="2" Margin="0,8,0,0" FontSize="11" Foreground="#666666" />
+            </Grid>
         </Border>
 
         <Image x:Name="PetImage"

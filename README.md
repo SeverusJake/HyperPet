@@ -15,6 +15,16 @@ This repo also builds with the installed .NET SDK 10.
 dotnet build HyperPet.sln
 ```
 
+## Release File Names
+
+For every new release, both distribution downloads must include the version:
+
+- `HyperPet-vX.Y.Z-win-Setup.exe`
+- `HyperPet-vX.Y.Z-win-Portable.zip`
+
+`pack.ps1 -Version X.Y.Z` creates these files, and `release.ps1` uploads them
+to GitHub. Keep Velopack update package and manifest names unchanged.
+
 ## Test
 
 ```powershell
@@ -46,11 +56,16 @@ monitor under the cursor. Refresh updates the monitor list in Settings.
 ## Notification Queue and History
 
 Notifications wait their turn instead of replacing the current speech bubble.
-Click **Next** to advance early, or **Dismiss** when the queue is empty. At most
+Click the notification to advance early; clicking the last notification closes it. At most
 100 pending alerts are retained; if full, the oldest pending alert is dropped.
 
-Open **Notification history** from the pet or tray menu, or click **History** in
-the bubble. The newest 50 accepted notifications are available to read or show
+The notification automatically chooses space above, right, left, or below the
+pet and stays within its monitor's work area. It follows the pet without
+changing the pet window's size. Long titles and messages can be scrolled;
+hovering over the notification pauses its expiry timer until you leave it.
+
+Open **Notification history** from the pet or tray menu, or click the small
+history icon at the bubble's top right. The newest 50 accepted notifications are available to read or show
 again. Replaying a notification does not create another history entry. Clear
 history removes the history list without discarding pending alerts.
 

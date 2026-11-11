@@ -2,8 +2,7 @@
 #
 # Bumps the version, publishes, packs (Setup + nupkgs + portable via pack.ps1),
 # commits + tags + pushes, then creates the GitHub release with EVERY asset
-# (Setup.exe, full + delta nupkg, releases.win.json, and the portable zip —
-# renamed to a versioned name so it never gets dropped again).
+# (versioned Setup.exe and portable zip, full + delta nupkg, releases.win.json).
 #
 # Usage:
 #   ./release.ps1 -Version 0.7.0
@@ -47,16 +46,13 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed." }
 # --- 3. Pack (Setup + nupkgs + portable, with Setup icon) ---
 & "$PSScriptRoot/pack.ps1" -Version $Version
 
-# --- 4. Version the portable zip so it isn't an unversioned generic name ---
-$portableSrc = 'Releases/HyperPet-win-Portable.zip'
+# --- 4. Use the versioned distribution files produced by pack.ps1 ---
+$setupDst = "Releases/HyperPet-v$Version-win-Setup.exe"
 $portableDst = "Releases/HyperPet-v$Version-win-Portable.zip"
-if (-not (Test-Path $portableSrc)) { throw "Portable zip not found: $portableSrc" }
-Copy-Item $portableSrc $portableDst -Force
-Write-Host "Portable -> $portableDst" -ForegroundColor Green
 
 # --- 5. Collect the release assets (delta only exists when a prior version did) ---
 $assets = @(
-    'Releases/HyperPet-win-Setup.exe',
+    $setupDst,
     "Releases/HyperPet-$Version-full.nupkg",
     'Releases/releases.win.json',
     $portableDst
