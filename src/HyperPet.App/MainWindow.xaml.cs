@@ -52,7 +52,6 @@ public partial class MainWindow : Window
     private IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
     private bool _movingRight = true;
     private bool _calmPressed;
-    private bool _calmDragging;
     private System.Windows.Point _calmPressScreen;
     private double _calmPressLeft;
     private double _calmPressTop;
@@ -136,7 +135,8 @@ public partial class MainWindow : Window
         HelpOverlayText.Text = BuildHelpText();
         Loaded += (_, _) =>
         {
-            ClampToWorkArea();
+            RestorePetPosition();
+            StartBehaviorMode();
             ApplyDebugOverlayVisibility();
             _ = MaybeAutoCheckForUpdateAsync();
         };
@@ -150,7 +150,6 @@ public partial class MainWindow : Window
         _petAnimator = new PetAnimator(spritePet, PetImage);
         _petAnimator.Completed += OnPetAnimationCompleted;
         ApplyPetSize();
-        StartBehaviorMode();
     }
 
     private void ApplyPetSize()
@@ -234,7 +233,7 @@ public partial class MainWindow : Window
 
     public void ClampToWorkArea()
     {
-        Rect workArea = SystemParameters.WorkArea;
+        WorkArea workArea = GetWorkArea(Left, Top);
         double windowWidth = GetWindowWidth();
         double windowHeight = GetWindowHeight();
         double maxLeft = Math.Max(workArea.Left, workArea.Right - windowWidth);
@@ -242,6 +241,29 @@ public partial class MainWindow : Window
 
         Left = Math.Clamp(Left, workArea.Left, maxLeft);
         Top = Math.Clamp(Top, workArea.Top, maxTop);
+    }
+
+    private void RestorePetPosition()
+    {
+        var defaults = HyperPetSettings.CreateDefault();
+        double left = _settings.RememberPetPosition ? _settings.PetLeft : defaults.PetLeft;
+        double top = _settings.RememberPetPosition ? _settings.PetTop : defaults.PetTop;
+        WorkArea workArea = GetWorkArea(
+            double.IsFinite(left) ? left : defaults.PetLeft,
+            double.IsFinite(top) ? top : defaults.PetTop);
+        Placement placement = PetPlacement.Compute(_settings, GetWindowWidth(), GetWindowHeight(), workArea);
+        Left = placement.Left;
+        Top = placement.Top;
+    }
+
+    private WorkArea GetWorkArea(double left, double top)
+    {
+        DpiScale dpi = VisualTreeHelper.GetDpi(this);
+        WorkArea? monitor = MonitorWorkArea.ForPoint(
+            left + GetWindowWidth() / 2, top + GetWindowHeight() / 2,
+            dpi.DpiScaleX, dpi.DpiScaleY);
+        Rect primary = SystemParameters.WorkArea;
+        return monitor ?? new WorkArea(primary.Left, primary.Top, primary.Right, primary.Bottom);
     }
 
     private void StartRunningMode()
@@ -302,7 +324,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        Rect workArea = SystemParameters.WorkArea;
+        WorkArea workArea = GetWorkArea(Left, Top);
         double windowWidth = GetWindowWidth();
         int speed = Math.Clamp(_settings.RunningSpeed, 1, 20);
         double nextLeft = Left + (_movingRight ? speed : -speed);
@@ -430,7 +452,6 @@ public partial class MainWindow : Window
             // timer. Quick release on the pet => click => jump. Holding past
             // the threshold => drag (manual move, with run L/R animation).
             _calmPressed = true;
-            _calmDragging = false;
             _calmHolding = false;
             _calmPressScreen = PointToScreen(e.GetPosition(this));
             _calmPressLeft = Left;
@@ -486,7 +507,6 @@ public partial class MainWindow : Window
         double dxTotal = (cur.X - _calmPressScreen.X) / dpi.DpiScaleX;
         double dyTotal = (cur.Y - _calmPressScreen.Y) / dpi.DpiScaleY;
 
-        _calmDragging = true;
         Left = _calmPressLeft + dxTotal;
         Top = _calmPressTop + dyTotal;
 
@@ -514,7 +534,6 @@ public partial class MainWindow : Window
 
         bool wasHolding = _calmHolding;
         _calmPressed = false;
-        _calmDragging = false;
         _calmHolding = false;
 
         DebugInteraction(wasHolding ? "release (drag end)" : "release (click)");
@@ -548,7 +567,6 @@ public partial class MainWindow : Window
         DebugInteraction("capture lost");
         _calmHoldTimer.Stop();
         _calmPressed = false;
-        _calmDragging = false;
         _calmHolding = false;
         StartBehaviorMode();
     }

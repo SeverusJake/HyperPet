@@ -21,7 +21,8 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(8, settings.AlertDurationSeconds);
         Assert.False(settings.AlertsPaused);
         Assert.True(settings.ShowFullNotificationContent);
-        Assert.False(settings.StartWithWindows);
+        Assert.True(settings.StartWithWindows);
+        Assert.True(settings.RememberPetPosition);
         Assert.True(settings.ReactToWindowsNotifications);
         Assert.True(settings.ReactToInAppNotifications);
         Assert.Equal(30, settings.WindowsNotificationPollIntervalSeconds);
@@ -51,7 +52,8 @@ public sealed class SettingsStoreTests : IDisposable
             PetBehaviorMode = PetBehaviorMode.Desktop,
             AlertsPaused = true,
             ShowFullNotificationContent = false,
-            StartWithWindows = true,
+            StartWithWindows = false,
+            RememberPetPosition = false,
             PetLeft = 140,
             PetTop = 220,
             ReactToWindowsNotifications = false,
@@ -80,6 +82,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(expected.AlertsPaused, actual.AlertsPaused);
         Assert.Equal(expected.ShowFullNotificationContent, actual.ShowFullNotificationContent);
         Assert.Equal(expected.StartWithWindows, actual.StartWithWindows);
+        Assert.False(actual.RememberPetPosition);
         Assert.Equal(expected.PetLeft, actual.PetLeft);
         Assert.Equal(expected.PetTop, actual.PetTop);
         Assert.False(actual.ReactToWindowsNotifications);
@@ -95,6 +98,39 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(2, actual.MessagingApps.Count);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Telegram" && app.Enabled);
         Assert.Contains(actual.MessagingApps, app => app.DisplayName == "Slack" && !app.Enabled);
+    }
+
+    [Fact]
+    public async Task LoadAsync_WhenStartupPreferencesMissing_EnablesBothByDefault()
+    {
+        var directory = CreateTempDirectory();
+        Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, "settings.json"), "{}");
+
+        var settings = await new SettingsStore(directory).LoadAsync();
+
+        Assert.True(settings.StartWithWindows);
+        Assert.True(settings.RememberPetPosition);
+    }
+
+    [Fact]
+    public async Task Save_ThenLoadAsync_PreservesDisabledStartupAndRememberPosition()
+    {
+        var store = new SettingsStore(CreateTempDirectory());
+        store.Save(new HyperPetSettings
+        {
+            StartWithWindows = false,
+            RememberPetPosition = false,
+            PetLeft = -1200,
+            PetTop = 250
+        });
+
+        var settings = await store.LoadAsync();
+
+        Assert.False(settings.StartWithWindows);
+        Assert.False(settings.RememberPetPosition);
+        Assert.Equal(-1200, settings.PetLeft);
+        Assert.Equal(250, settings.PetTop);
     }
 
     [Fact]

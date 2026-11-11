@@ -90,6 +90,15 @@ public partial class App : Application
         }
 
         var petController = new PetController();
+        try
+        {
+            ApplyStartupSetting(_settings.StartWithWindows);
+        }
+        catch (Exception exception)
+        {
+            _logger.Error("Could not apply the Windows startup setting", exception);
+        }
+
         var notificationDedupe = new NotificationDedupe();
         var notificationListener = new WindowsNotificationListener(_logger);
         _notificationListener = notificationListener;
@@ -131,12 +140,7 @@ public partial class App : Application
             _petCatalog,
             LoadPetByIdAsync,
             _userPetsRoot,
-            () => PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot))
-        {
-            Left = _settings.PetLeft,
-            Top = _settings.PetTop
-        };
-        _mainWindow.ClampToWorkArea();
+            () => PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot));
         _mainWindow.Show();
 
         _trayIcon = new TrayIcon(
@@ -590,6 +594,12 @@ public partial class App : Application
 
         try
         {
+            if (_mainWindow is not null)
+            {
+                _settings.PetLeft = _mainWindow.Left;
+                _settings.PetTop = _mainWindow.Top;
+            }
+
             _settingsStore.Save(_settings);
         }
         catch (Exception exception)

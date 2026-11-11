@@ -22,7 +22,8 @@ public sealed class HyperPetSettings
     public int RunningSpeed { get; set; } = 2;
     public bool AlertsPaused { get; set; }
     public bool ShowFullNotificationContent { get; set; } = true;
-    public bool StartWithWindows { get; set; }
+    public bool StartWithWindows { get; set; } = true;
+    public bool RememberPetPosition { get; set; } = true;
     public double PetLeft { get; set; } = 80;
     public double PetTop { get; set; } = 80;
 

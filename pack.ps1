@@ -18,4 +18,6 @@ vpk pack `
     --mainExe HyperPet.exe `
     --icon "src/HyperPet.App/Assets/HyperPet.ico"
 
+if ($LASTEXITCODE -ne 0) { throw "vpk pack failed." }
+
 Write-Host "Packed HyperPet $Version. Output in Releases/." -ForegroundColor Green

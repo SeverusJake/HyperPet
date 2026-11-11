@@ -5,7 +5,7 @@
         Title="Settings"
         Width="500"
         Height="640"
-        Icon="/Assets/HyperPet.ico"
+        Icon="/HyperPet;component/Assets/HyperPet.ico"
         ResizeMode="NoResize">
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -56,6 +56,10 @@
                         <CheckBox x:Name="StartWithWindowsCheckBox"
                                   Margin="0,10,0,0"
                                   Content="Start with Windows" />
+
+                        <CheckBox x:Name="RememberPetPositionCheckBox"
+                                  Margin="0,8,0,0"
+                                  Content="Remember pet position on launch" />
 
                         <CheckBox x:Name="OpenAppOnBubbleClickCheckBox"
                                   Margin="0,8,0,0"

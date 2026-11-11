@@ -43,7 +43,7 @@ public partial class SettingsWindow : Window
     // General-tab factory defaults — used by the Default button to restore
     // the dialog to a known clean state. These mirror HyperPetSettings.CreateDefault().
     private const bool DefaultShowFullContent = true;
-    private const bool DefaultStartWithWindows = false;
+    private const bool DefaultStartWithWindows = true;
     private const bool DefaultOpenAppOnBubbleClick = true;
     private const bool DefaultReactToWindowsNotifications = true;
     private const bool DefaultReactToInAppNotifications = true;
@@ -87,6 +87,7 @@ public partial class SettingsWindow : Window
 
         ShowFullContentCheckBox.IsChecked = settings.ShowFullNotificationContent;
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
+        RememberPetPositionCheckBox.IsChecked = settings.RememberPetPosition;
         OpenAppOnBubbleClickCheckBox.IsChecked = settings.OpenAppOnBubbleClick;
         ReactToWindowsNotificationsCheckBox.IsChecked = settings.ReactToWindowsNotifications;
         ReactToInAppNotificationsCheckBox.IsChecked = settings.ReactToInAppNotifications;
@@ -169,6 +170,7 @@ public partial class SettingsWindow : Window
     {
         ShowFullContentCheckBox.Click += OnAnyChange;
         StartWithWindowsCheckBox.Click += OnAnyChange;
+        RememberPetPositionCheckBox.Click += OnAnyChange;
         OpenAppOnBubbleClickCheckBox.Click += OnAnyChange;
         ReactToWindowsNotificationsCheckBox.Click += OnAnyChange;
         ReactToInAppNotificationsCheckBox.Click += OnAnyChange;
@@ -482,6 +484,7 @@ public partial class SettingsWindow : Window
         // to commit, or Close to discard.
         ShowFullContentCheckBox.IsChecked = DefaultShowFullContent;
         StartWithWindowsCheckBox.IsChecked = DefaultStartWithWindows;
+        RememberPetPositionCheckBox.IsChecked = true;
         OpenAppOnBubbleClickCheckBox.IsChecked = DefaultOpenAppOnBubbleClick;
         ReactToWindowsNotificationsCheckBox.IsChecked = DefaultReactToWindowsNotifications;
         ReactToInAppNotificationsCheckBox.IsChecked = DefaultReactToInAppNotifications;
@@ -575,6 +578,7 @@ public partial class SettingsWindow : Window
         // the current pet into _settings and mutate the live PetDefinition so
         // the change takes effect immediately (caller restarts the animator).
         _settings.AutoUpdate = AutoUpdateCheckBox.IsChecked == true;
+        _settings.RememberPetPosition = RememberPetPositionCheckBox.IsChecked == true;
         if (PetPickerComboBox.SelectedValue is string selectedPetId && !string.IsNullOrWhiteSpace(selectedPetId))
         {
             _settings.SelectedPet = selectedPetId;

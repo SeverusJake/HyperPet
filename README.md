@@ -29,6 +29,13 @@ dotnet run --project src/HyperPet.App/HyperPet.App.csproj
 
 `dotnet run` is useful for UI smoke testing. Real Windows notification listener permission requires an MSIX/package identity with the `userNotificationListener` capability declared in `src/HyperPet.App/Package.appxmanifest`.
 
+## Startup and Position
+
+In Settings → General, **Start with Windows** is on by default for new settings.
+Saved startup preferences are preserved. **Remember pet position on launch** is
+also on by default. Turn it off to open at the default position instead. Saved
+positions are kept within the nearest available monitor's work area.
+
 ## Notification Access
 
 Windows may ask for notification access permission. Some apps hide or trim notification content before Windows exposes it, so HyperPet cannot guarantee that the available content is the original full notification text.

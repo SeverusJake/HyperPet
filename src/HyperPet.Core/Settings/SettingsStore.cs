@@ -78,6 +78,7 @@ public sealed class SettingsStore
             AlertsPaused = settings.AlertsPaused,
             ShowFullNotificationContent = settings.ShowFullNotificationContent,
             StartWithWindows = settings.StartWithWindows,
+            RememberPetPosition = settings.RememberPetPosition,
             PetLeft = settings.PetLeft,
             PetTop = settings.PetTop,
             OpenAppOnBubbleClick = settings.OpenAppOnBubbleClick,
