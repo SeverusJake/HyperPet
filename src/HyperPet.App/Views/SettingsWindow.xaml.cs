@@ -88,6 +88,7 @@ public partial class SettingsWindow : Window
         ShowFullContentCheckBox.IsChecked = settings.ShowFullNotificationContent;
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
         RememberPetPositionCheckBox.IsChecked = settings.RememberPetPosition;
+        RefreshMonitors(settings.PreferredMonitorId);
         OpenAppOnBubbleClickCheckBox.IsChecked = settings.OpenAppOnBubbleClick;
         ReactToWindowsNotificationsCheckBox.IsChecked = settings.ReactToWindowsNotifications;
         ReactToInAppNotificationsCheckBox.IsChecked = settings.ReactToInAppNotifications;
@@ -179,6 +180,7 @@ public partial class SettingsWindow : Window
         QuietHoursCheckBox.Click += OnAnyChange;
 
         PetBehaviorComboBox.SelectionChanged += OnAnyChange;
+        MonitorPickerComboBox.SelectionChanged += OnAnyChange;
         PetPickerComboBox.SelectionChanged += OnAnyChange;
         PetPickerComboBox.SelectionChanged += (_, _) => UpdateRemoveButtonState();
 
@@ -203,6 +205,25 @@ public partial class SettingsWindow : Window
     }
 
     private void OnAnyChange(object? sender, EventArgs e) => MarkDirty();
+
+    private sealed record MonitorChoice(string Id, string DisplayName);
+
+    private void RefreshMonitors(string selectedId)
+    {
+        var choices = new List<MonitorChoice> { new(string.Empty, "Automatic (current / last monitor)") };
+        choices.AddRange(DesktopMonitors.Enumerate().Select(monitor => new MonitorChoice(monitor.Id, monitor.DisplayName)));
+        if (!string.IsNullOrEmpty(selectedId)
+            && !choices.Any(choice => string.Equals(choice.Id, selectedId, StringComparison.OrdinalIgnoreCase)))
+        {
+            choices.Add(new MonitorChoice(selectedId, $"Disconnected monitor ({selectedId})"));
+        }
+        MonitorPickerComboBox.ItemsSource = choices;
+        MonitorPickerComboBox.SelectedValue = choices.First(choice =>
+            string.Equals(choice.Id, selectedId, StringComparison.OrdinalIgnoreCase)).Id;
+    }
+
+    private void OnRefreshMonitorsClick(object sender, RoutedEventArgs e)
+        => RefreshMonitors(MonitorPickerComboBox.SelectedValue as string ?? string.Empty);
 
     private void OnMessagingAppRulePropertyChanged(object? sender, PropertyChangedEventArgs e) => MarkDirty();
 
@@ -485,6 +506,7 @@ public partial class SettingsWindow : Window
         ShowFullContentCheckBox.IsChecked = DefaultShowFullContent;
         StartWithWindowsCheckBox.IsChecked = DefaultStartWithWindows;
         RememberPetPositionCheckBox.IsChecked = true;
+        MonitorPickerComboBox.SelectedValue = string.Empty;
         OpenAppOnBubbleClickCheckBox.IsChecked = DefaultOpenAppOnBubbleClick;
         ReactToWindowsNotificationsCheckBox.IsChecked = DefaultReactToWindowsNotifications;
         ReactToInAppNotificationsCheckBox.IsChecked = DefaultReactToInAppNotifications;
@@ -579,6 +601,7 @@ public partial class SettingsWindow : Window
         // the change takes effect immediately (caller restarts the animator).
         _settings.AutoUpdate = AutoUpdateCheckBox.IsChecked == true;
         _settings.RememberPetPosition = RememberPetPositionCheckBox.IsChecked == true;
+        _settings.PreferredMonitorId = MonitorPickerComboBox.SelectedValue as string ?? string.Empty;
         if (PetPickerComboBox.SelectedValue is string selectedPetId && !string.IsNullOrWhiteSpace(selectedPetId))
         {
             _settings.SelectedPet = selectedPetId;

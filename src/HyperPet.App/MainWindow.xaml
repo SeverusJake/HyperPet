@@ -33,6 +33,7 @@
                           Click="OnPauseAlertsClick" />
                 <MenuItem Header="Settings"
                           Click="OnSettingsClick" />
+                <MenuItem Header="Notification history" Click="OnHistoryClick" />
                 <Separator />
                 <MenuItem Header="Quit"
                           Click="OnQuitClick" />
@@ -40,6 +41,7 @@
         </Grid.ContextMenu>
 
         <Border x:Name="Bubble"
+                Panel.ZIndex="1"
                 Width="250"
                 Padding="14"
                 HorizontalAlignment="Left"
@@ -70,6 +72,13 @@
                            MaxHeight="72"
                            TextTrimming="CharacterEllipsis"
                            TextWrapping="Wrap" />
+                <DockPanel Margin="0,8,0,0">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button x:Name="NextAlertButton" Content="Next" Padding="6,2" Click="OnNextAlertClick" />
+                        <Button Content="History" Margin="6,0,0,0" Padding="6,2" Click="OnHistoryClick" />
+                    </StackPanel>
+                    <TextBlock x:Name="PendingAlertsText" VerticalAlignment="Center" FontSize="11" />
+                </DockPanel>
             </StackPanel>
         </Border>
 
@@ -82,6 +91,7 @@
                Stretch="Uniform" />
 
         <Border x:Name="DebugOverlay"
+                Panel.ZIndex="2"
                 Padding="6,3"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top"
@@ -96,6 +106,7 @@
         </Border>
 
         <Border x:Name="HelpOverlay"
+                Panel.ZIndex="3"
                 Margin="0,28,0,0"
                 Padding="10,8"
                 HorizontalAlignment="Right"

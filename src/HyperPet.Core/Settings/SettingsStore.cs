@@ -79,6 +79,7 @@ public sealed class SettingsStore
             ShowFullNotificationContent = settings.ShowFullNotificationContent,
             StartWithWindows = settings.StartWithWindows,
             RememberPetPosition = settings.RememberPetPosition,
+            PreferredMonitorId = settings.PreferredMonitorId?.Trim() ?? string.Empty,
             PetLeft = settings.PetLeft,
             PetTop = settings.PetTop,
             OpenAppOnBubbleClick = settings.OpenAppOnBubbleClick,

@@ -24,6 +24,7 @@ public sealed class HyperPetSettings
     public bool ShowFullNotificationContent { get; set; } = true;
     public bool StartWithWindows { get; set; } = true;
     public bool RememberPetPosition { get; set; } = true;
+    public string PreferredMonitorId { get; set; } = string.Empty;
     public double PetLeft { get; set; } = 80;
     public double PetTop { get; set; } = 80;
 

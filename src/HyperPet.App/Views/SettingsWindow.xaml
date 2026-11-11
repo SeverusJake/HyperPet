@@ -61,6 +61,18 @@
                                   Margin="0,8,0,0"
                                   Content="Remember pet position on launch" />
 
+                        <StackPanel Margin="0,12,0,4">
+                            <TextBlock Text="Pet monitor" />
+                            <DockPanel Margin="0,6,0,0">
+                                <Button DockPanel.Dock="Right" Content="Refresh" Margin="6,0,0,0"
+                                        Padding="8,2" Click="OnRefreshMonitorsClick" />
+                                <ComboBox x:Name="MonitorPickerComboBox"
+                                          DisplayMemberPath="DisplayName" SelectedValuePath="Id" />
+                            </DockPanel>
+                            <TextBlock Margin="0,4,0,0" Foreground="#666" TextWrapping="Wrap"
+                                       Text="If the selected monitor is disconnected, the pet moves to an available monitor." />
+                        </StackPanel>
+
                         <CheckBox x:Name="OpenAppOnBubbleClickCheckBox"
                                   Margin="0,8,0,0"
                                   Content="Click bubble to open app"

@@ -18,11 +18,13 @@ public sealed class TrayIcon : IDisposable
         Action onCome,
         Action onSettings,
         Action onCheckForUpdate,
-        Action onTuckAway)
+        Action onTuckAway,
+        Action? onHistory = null)
     {
         var menu = new ContextMenuStrip();
         menu.Items.Add("Come", null, (_, _) => onCome());
         menu.Items.Add("Settings", null, (_, _) => onSettings());
+        if (onHistory is not null) { menu.Items.Add("Notification history", null, (_, _) => onHistory()); }
         menu.Items.Add("Check for update", null, (_, _) => onCheckForUpdate());
         menu.Items.Add("Tuck Away", null, (_, _) => onTuckAway());
 

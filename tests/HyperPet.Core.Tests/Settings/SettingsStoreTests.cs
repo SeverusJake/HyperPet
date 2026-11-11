@@ -23,6 +23,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.True(settings.ShowFullNotificationContent);
         Assert.True(settings.StartWithWindows);
         Assert.True(settings.RememberPetPosition);
+        Assert.Equal(string.Empty, settings.PreferredMonitorId);
         Assert.True(settings.ReactToWindowsNotifications);
         Assert.True(settings.ReactToInAppNotifications);
         Assert.Equal(30, settings.WindowsNotificationPollIntervalSeconds);
@@ -54,6 +55,7 @@ public sealed class SettingsStoreTests : IDisposable
             ShowFullNotificationContent = false,
             StartWithWindows = false,
             RememberPetPosition = false,
+            PreferredMonitorId = @"\\.\DISPLAY2",
             PetLeft = 140,
             PetTop = 220,
             ReactToWindowsNotifications = false,
@@ -83,6 +85,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(expected.ShowFullNotificationContent, actual.ShowFullNotificationContent);
         Assert.Equal(expected.StartWithWindows, actual.StartWithWindows);
         Assert.False(actual.RememberPetPosition);
+        Assert.Equal(@"\\.\DISPLAY2", actual.PreferredMonitorId);
         Assert.Equal(expected.PetLeft, actual.PetLeft);
         Assert.Equal(expected.PetTop, actual.PetTop);
         Assert.False(actual.ReactToWindowsNotifications);

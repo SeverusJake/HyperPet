@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using HyperPet.App.Notifications;
+using HyperPet.App.Lifecycle;
 using HyperPet.App.Pets;
 using HyperPet.App.Update;
 using HyperPet.App.Views;
@@ -48,20 +49,18 @@ public partial class App : Application
                 // Clean up user data (settings, logs, imported pets) so an
                 // uninstall leaves nothing behind. Best-effort; the uninstaller
                 // exits the process right after this hook.
-                try
-                {
-                    string dataDir = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "HyperPet");
-                    if (Directory.Exists(dataDir))
+                UninstallCleanup.Run(
+                    () => _startupService.SetEnabled(false, string.Empty),
+                    () =>
                     {
-                        Directory.Delete(dataDir, recursive: true);
-                    }
-                }
-                catch
-                {
-                    // Ignore — never block uninstall on cleanup failure.
-                }
+                        string dataDir = Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                            "HyperPet");
+                        if (Directory.Exists(dataDir))
+                        {
+                            Directory.Delete(dataDir, recursive: true);
+                        }
+                    });
             })
             .Run();
 
@@ -148,7 +147,8 @@ public partial class App : Application
             onCome: () => _mainWindow!.Summon(),
             onSettings: () => _mainWindow!.OpenSettings(),
             onCheckForUpdate: () => _ = _mainWindow!.CheckForUpdateFromTray(msg => _trayIcon?.Notify(msg)),
-            onTuckAway: () => _mainWindow!.TuckAway());
+            onTuckAway: () => _mainWindow!.TuckAway(),
+            onHistory: () => _mainWindow!.OpenNotificationHistory());
 
         if (settingsLoadException is not null)
         {

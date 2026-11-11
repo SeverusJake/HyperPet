@@ -1,0 +1,41 @@
+<Window x:Class="HyperPet.App.Views.HistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Notification history" Width="560" Height="520" MinWidth="420" MinHeight="360"
+        Icon="/HyperPet;component/Assets/HyperPet.ico" ShowInTaskbar="False">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="Last 50 notifications from this session. History is cleared when the app closes."
+                   TextWrapping="Wrap" Margin="0,0,0,10" />
+        <ListBox x:Name="HistoryListBox" Grid.Row="1" HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="OnSelectionChanged">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="3,4">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Foreground="#666" Margin="8,0,0,0"
+                                       Text="{Binding Alert.Timestamp.LocalDateTime, StringFormat={}{0:g}}" />
+                            <TextBlock FontWeight="SemiBold" Text="{Binding Alert.AppName}" TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding Alert.Title}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <TextBox x:Name="SelectedBodyTextBox" Grid.Row="2" Margin="0,10,0,0" Height="100"
+                 IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                 Text="{Binding SelectedItem.Alert.Body, ElementName=HistoryListBox, Mode=OneWay}" />
+        <TextBlock x:Name="HistoryStatusText" Grid.Row="3" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#666" />
+        <DockPanel Grid.Row="4" Margin="0,12,0,0">
+            <Button x:Name="ClearHistoryButton" DockPanel.Dock="Left" Content="Clear history"
+                    Padding="10,4" Click="OnClearHistoryClick" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="ReplayButton" Content="Show again" Padding="10,4" Click="OnReplayClick" />
+                <Button Content="Close" Margin="8,0,0,0" Padding="10,4" Click="OnCloseClick" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

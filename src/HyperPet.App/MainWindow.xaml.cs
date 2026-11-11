@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private readonly HyperPetSettings _settings;
     private readonly Action<bool> _applyStartupSetting;
     private readonly Action _saveSettings;
+    private readonly Action _requestShutdown;
     private readonly Action<TimeSpan>? _setPollInterval;
     private readonly Action<TimeSpan>? _pollSoon;
     private readonly DebugNotificationSimulator? _debugSimulator;
@@ -39,6 +40,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _calmTimer = new();
     private readonly DispatcherTimer _movementTimer = new();
     private readonly DispatcherTimer _debugOverlayTimer = new();
+    private readonly DispatcherTimer _tuckAwayTimer = new();
     private readonly Random _random = new();
     private PetAnimator? _petAnimator;
     private SpritePet? _spritePet;
@@ -47,6 +49,7 @@ public partial class MainWindow : Window
     private bool _summoned;
     private bool _summonWalking;   // true while walking to center (movement ticking)
     private bool _tuckingAway;     // true after Tuck Away requested, awaiting "failed" end
+    private bool _shutdownRequested;
     private string _lastRoamAnimation = string.Empty;
     private IReadOnlyDictionary<string, int>? _originalStateFps;
     private IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
@@ -94,11 +97,16 @@ public partial class MainWindow : Window
         IReadOnlyList<PetCatalogEntry>? petCatalog = null,
         Func<string, Task<SpritePet?>>? petLoader = null,
         string? userPetsRoot = null,
-        Func<Task<IReadOnlyList<PetCatalogEntry>>>? rediscoverPets = null)
+        Func<Task<IReadOnlyList<PetCatalogEntry>>>? rediscoverPets = null,
+        Action? requestShutdown = null,
+        Func<IReadOnlyList<DesktopMonitor>>? monitorProvider = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
         _saveSettings = saveSettings;
+        _requestShutdown = requestShutdown ?? (() => Application.Current.Shutdown());
+        _monitorProvider = monitorProvider ?? DesktopMonitors.Enumerate;
+        _appliedMonitorId = settings.PreferredMonitorId;
         _spritePet = spritePet;
         _originalStateFps = originalStateFps;
         _originalStatePlayMode = originalStatePlayMode;
@@ -125,6 +133,23 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
 
         _alertTimer.Tick += (_, _) => DismissAlert();
+        _notificationInbox.Changed += OnInboxChanged;
+        OnInboxChanged(this, EventArgs.Empty);
+        _tuckAwayTimer.Tick += (_, _) => FinishTuckAway();
+        Closed += (_, _) =>
+        {
+            StopMonitorTracking();
+            _historyWindow?.Close();
+            _notificationInbox.Changed -= OnInboxChanged;
+            _notificationInbox.Clear();
+            _notificationInbox.ClearHistory();
+            StopBehaviorTimers();
+            StopInteractionTimers();
+            _alertTimer.Stop();
+            _debugOverlayTimer.Stop();
+            _tuckAwayTimer.Stop();
+            _petAnimator?.Stop();
+        };
         _calmTimer.Tick += OnCalmTimerTick;
         _calmJumpTimer.Tick += OnCalmJumpTimerTick;
         _calmHoldTimer.Tick += OnCalmHoldTimerTick;
@@ -135,6 +160,7 @@ public partial class MainWindow : Window
         HelpOverlayText.Text = BuildHelpText();
         Loaded += (_, _) =>
         {
+            StartMonitorTracking();
             RestorePetPosition();
             StartBehaviorMode();
             ApplyDebugOverlayVisibility();
@@ -165,44 +191,9 @@ public partial class MainWindow : Window
         PetImage.Height = BaselineHeight * scale;
     }
 
-    public void ShowAlert(PetAlert alert)
-    {
-        if (_viewModel.AlertsPaused)
-        {
-            return;
-        }
-
-        _viewModel.CurrentAlert = alert;
-        _alertActive = true;
-        _debugTotalAlerts++;
-        UpdateDebugOverlay();
-        BubbleAppName.Text = alert.AppName;
-        BubbleTitle.Text = alert.Title;
-        BubbleBody.Text = alert.Body;
-        Bubble.Visibility = Visibility.Visible;
-        StopBehaviorTimers();
-        _petAnimator?.Play("waving");
-
-        _alertTimer.Stop();
-        _alertTimer.Interval = TimeSpan.FromSeconds(_settings.AlertDurationSeconds);
-        _alertTimer.Start();
-    }
-
-    public void DismissAlert()
-    {
-        _alertTimer.Stop();
-        _viewModel.CurrentAlert = null;
-        _alertActive = false;
-        Bubble.Visibility = Visibility.Collapsed;
-        BubbleAppName.Text = string.Empty;
-        BubbleTitle.Text = string.Empty;
-        BubbleBody.Text = string.Empty;
-        StartBehaviorMode();
-    }
-
     private void StartBehaviorMode()
     {
-        if (_petAnimator is null || _alertActive)
+        if (_petAnimator is null || _alertActive || _tuckingAway)
         {
             return;
         }
@@ -231,41 +222,6 @@ public partial class MainWindow : Window
         _calmTimer.Start();
     }
 
-    public void ClampToWorkArea()
-    {
-        WorkArea workArea = GetWorkArea(Left, Top);
-        double windowWidth = GetWindowWidth();
-        double windowHeight = GetWindowHeight();
-        double maxLeft = Math.Max(workArea.Left, workArea.Right - windowWidth);
-        double maxTop = Math.Max(workArea.Top, workArea.Bottom - windowHeight);
-
-        Left = Math.Clamp(Left, workArea.Left, maxLeft);
-        Top = Math.Clamp(Top, workArea.Top, maxTop);
-    }
-
-    private void RestorePetPosition()
-    {
-        var defaults = HyperPetSettings.CreateDefault();
-        double left = _settings.RememberPetPosition ? _settings.PetLeft : defaults.PetLeft;
-        double top = _settings.RememberPetPosition ? _settings.PetTop : defaults.PetTop;
-        WorkArea workArea = GetWorkArea(
-            double.IsFinite(left) ? left : defaults.PetLeft,
-            double.IsFinite(top) ? top : defaults.PetTop);
-        Placement placement = PetPlacement.Compute(_settings, GetWindowWidth(), GetWindowHeight(), workArea);
-        Left = placement.Left;
-        Top = placement.Top;
-    }
-
-    private WorkArea GetWorkArea(double left, double top)
-    {
-        DpiScale dpi = VisualTreeHelper.GetDpi(this);
-        WorkArea? monitor = MonitorWorkArea.ForPoint(
-            left + GetWindowWidth() / 2, top + GetWindowHeight() / 2,
-            dpi.DpiScaleX, dpi.DpiScaleY);
-        Rect primary = SystemParameters.WorkArea;
-        return monitor ?? new WorkArea(primary.Left, primary.Top, primary.Right, primary.Bottom);
-    }
-
     private void StartRunningMode()
     {
         _calmTimer.Stop();
@@ -286,7 +242,14 @@ public partial class MainWindow : Window
         if (_roamController is null)
         {
             IntPtr hwnd = new WindowInteropHelper(this).EnsureHandle();
-            _roamController = new DesktopRoamController(new WindowLedgeProvider(hwnd), _random);
+            var provider = new WindowLedgeProvider(hwnd,
+                () => GetWorkArea(Left, Top),
+                () =>
+                {
+                    DpiScale dpi = VisualTreeHelper.GetDpi(this);
+                    return (dpi.DpiScaleX, dpi.DpiScaleY);
+                }) { PetHeight = GetWindowHeight() };
+            _roamController = new DesktopRoamController(provider, _random);
         }
 
         _roamController.PetWidth = GetWindowWidth();
@@ -353,6 +316,7 @@ public partial class MainWindow : Window
         _roamController.Tick();
         Left = _roamController.X;
         Top = _roamController.Y;
+        ClampToWorkArea();
 
         if (_roamController.CurrentAnimation != _lastRoamAnimation)
         {
@@ -365,8 +329,7 @@ public partial class MainWindow : Window
     {
         if (_tuckingAway && finishedState == "failed")
         {
-            _tuckingAway = false;
-            Application.Current.Shutdown();
+            FinishTuckAway();
             return;
         }
 
@@ -427,7 +390,8 @@ public partial class MainWindow : Window
     private bool IsCalmInteractive()
         => _settings.PetBehaviorMode == PetBehaviorMode.Calm
            && _petAnimator is not null
-           && !_alertActive;
+           && !_alertActive
+           && !_tuckingAway;
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -476,6 +440,7 @@ public partial class MainWindow : Window
         try
         {
             DragMove();
+            ClampToWorkArea();
         }
         catch (InvalidOperationException)
         {
@@ -540,6 +505,7 @@ public partial class MainWindow : Window
 
         if (wasHolding)
         {
+            ClampToWorkArea();
             // End of hold/drag: back to calm idle.
             StartBehaviorMode();
             return;
@@ -793,7 +759,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_petAnimator is null || _alertActive)
+        if (_petAnimator is null || _alertActive || _tuckingAway)
         {
             return;
         }
@@ -809,10 +775,7 @@ public partial class MainWindow : Window
         double cursorDipX = cursor.X / dpi.DpiScaleX;
         double cursorDipY = cursor.Y / dpi.DpiScaleY;
 
-        WorkArea? monitor = MonitorWorkArea.ForPoint(
-            cursorDipX, cursorDipY, dpi.DpiScaleX, dpi.DpiScaleY);
-        Rect primary = SystemParameters.WorkArea;
-        WorkArea wa = monitor ?? new WorkArea(primary.Left, primary.Top, primary.Right, primary.Bottom);
+        WorkArea wa = GetWorkAreaForPoint(cursorDipX, cursorDipY);
 
         double targetX = wa.Left + ((wa.Right - wa.Left) - petW) / 2.0;
         double targetY = wa.Top + ((wa.Bottom - wa.Top) - petH) / 2.0;
@@ -838,18 +801,54 @@ public partial class MainWindow : Window
             return;
         }
 
-        StopBehaviorTimers();
-        _summoned = false;
-        _summonWalking = false;
-
-        if (_petAnimator is null)
+        if (_tuckingAway)
         {
-            Application.Current.Shutdown();
             return;
         }
 
         _tuckingAway = true;
+        StopBehaviorTimers();
+        StopInteractionTimers();
+        DismissAlert();
+        RootGrid.IsHitTestVisible = false;
+        RootGrid.ReleaseMouseCapture();
+        _summoned = false;
+        _summonWalking = false;
+
+        if (_petAnimator is null || _spritePet is null
+            || !_spritePet.Definition.States.TryGetValue("failed", out var exitState))
+        {
+            FinishTuckAway();
+            return;
+        }
+
+        // A paused, single-frame, looping, or interrupted animation may never
+        // raise Completed. Always bound the wait for shutdown.
+        double seconds = exitState.Frames / (double)Math.Max(1, exitState.Fps);
+        _tuckAwayTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(seconds + 0.25, 0.25, 5));
+        _tuckAwayTimer.Start();
         _petAnimator.Play("failed"); // OnPetAnimationCompleted -> Shutdown
+    }
+
+    private void StopInteractionTimers()
+    {
+        _calmJumpTimer.Stop();
+        _calmHoldTimer.Stop();
+        CancelHoverExit();
+        _calmPressed = false;
+        _calmHolding = false;
+    }
+
+    private void FinishTuckAway()
+    {
+        _tuckAwayTimer.Stop();
+        if (_shutdownRequested)
+        {
+            return;
+        }
+        _shutdownRequested = true;
+        _petAnimator?.Stop();
+        _requestShutdown();
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
@@ -902,11 +901,13 @@ public partial class MainWindow : Window
 
     private void RefreshFromSettings()
     {
+        if (_tuckingAway) { return; }
+        RefreshNotificationPreferences();
         // Called by SettingsWindow on Save or Apply. Persists the new values
         // and pushes them into the running app (pet size, behavior, debug
         // overlay, monitor intervals, state-animation fps).
-        _saveSettings();
         ApplyPetSize();
+        ApplyMonitorPreference();
         // Restart the current animator state so any state-speed overrides
         // applied to the SpritePet definition take effect on the live pet
         // instead of waiting for the next state transition.
@@ -917,6 +918,7 @@ public partial class MainWindow : Window
         StartBehaviorMode();
         ApplyDebugOverlayVisibility();
         _applyMonitoringSettings?.Invoke();
+        _saveSettings();
     }
 
     /// <summary>
@@ -934,7 +936,7 @@ public partial class MainWindow : Window
         try
         {
             SpritePet? pet = await _petLoader(petId);
-            if (pet is null)
+            if (pet is null || _tuckingAway)
             {
                 return; // keep current pet
             }
@@ -1223,6 +1225,7 @@ public partial class MainWindow : Window
 
     private void OnWindowKeyDown(object sender, KeyEventArgs e)
     {
+        if (_tuckingAway) { e.Handled = true; return; }
         if (!_settings.DebugMode)
         {
             return;

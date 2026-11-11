@@ -1,4 +1,4 @@
-using System.Threading;
+using HyperPet.App.Tests.TestSupport;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -7,6 +7,7 @@ using HyperPet.Core.Settings;
 
 namespace HyperPet.App.Tests.Views;
 
+[Collection("WPF UI")]
 public sealed class StartupPreferencesWindowTests
 {
     [Fact]
@@ -99,26 +100,5 @@ public sealed class StartupPreferencesWindowTests
     }
 
     private static Task RunOnStaThread(Action action)
-    {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-                completion.SetResult();
-            }
-            catch (Exception exception)
-            {
-                completion.SetException(exception);
-            }
-            finally
-            {
-                Dispatcher.CurrentDispatcher.InvokeShutdown();
-            }
-        });
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        return completion.Task;
-    }
+        => StaThread.RunAsync(action);
 }
