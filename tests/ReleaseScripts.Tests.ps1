@@ -33,7 +33,7 @@ try {
     Write-Host 'PASS native exit-code guard'
 } finally {
     # Only this explicitly created, random temporary folder is removed.
-    if ((Split-Path $sandbox -Parent) -ne [IO.Path]::TrimEndingDirectorySeparator([IO.Path]::GetTempPath())) { throw 'Unsafe test cleanup target.' }
+    if ((Split-Path $sandbox -Parent) -ne [IO.Path]::GetTempPath().TrimEnd('\', '/')) { throw 'Unsafe test cleanup target.' }
     Remove-Item -LiteralPath $sandbox -Recurse -Force
 }
 Write-Host '3 PowerShell regression groups passed.'

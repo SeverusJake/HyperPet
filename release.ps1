@@ -2,6 +2,8 @@
 param(
     [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
     [string]$NotesFile,
+    # Previous release's HyperPet-X.Y.Z-full.nupkg; enables the delta update package.
+    [string]$PreviousPackage,
     [Alias('DryRun')][switch]$BuildOnly,
     [switch]$Publish
 )
@@ -35,7 +37,10 @@ try {
     $appDirectory = Join-Path $output 'app'
     $releaseDirectory = Join-Path $output 'releases'
     Invoke-ReleaseCommand -Command dotnet -Arguments @('publish', $project, '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true', '-o', $appDirectory, "-p:SourceRevisionId=$commit")
-    & (Join-Path $PSScriptRoot 'pack.ps1') -Version $Version -PackDirectory $appDirectory -OutputDirectory $releaseDirectory
+    $packArguments = @{ Version = $Version; PackDirectory = $appDirectory; OutputDirectory = $releaseDirectory }
+    if ($PreviousPackage) { $packArguments.PreviousPackage = (Resolve-Path -LiteralPath $PreviousPackage).Path }
+    else { Write-Warning 'No -PreviousPackage: this release has no delta package; updates download the full package.' }
+    & (Join-Path $PSScriptRoot 'pack.ps1') @packArguments
     $assets = @(
         (Join-Path $releaseDirectory "HyperPet-v$Version-win-Setup.exe"),
         (Join-Path $releaseDirectory "HyperPet-v$Version-win-Portable.zip"),

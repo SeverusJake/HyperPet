@@ -48,8 +48,16 @@ internal static class PetPathPolicy
     public static void RejectReparseAncestors(string path)
     {
         for (string? current = Path.GetFullPath(path); current is not null; current = Path.GetDirectoryName(current))
-            if ((File.Exists(current) || Directory.Exists(current)) &&
-                (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            if (IsLink(current))
                 throw new InvalidOperationException("Pet paths must not contain symbolic links or junctions.");
+    }
+
+    // Only name-surrogate reparse points redirect a path. Cloud placeholders
+    // (OneDrive Files On-Demand) also carry the ReparsePoint attribute but stay
+    // in place, so they have no link target and must remain importable.
+    internal static bool IsLink(string path)
+    {
+        FileSystemInfo info = Directory.Exists(path) ? new DirectoryInfo(path) : new FileInfo(path);
+        return info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0 && info.LinkTarget is not null;
     }
 }

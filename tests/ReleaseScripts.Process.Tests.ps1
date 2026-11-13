@@ -3,7 +3,7 @@
 $ErrorActionPreference = 'Stop'
 $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $processSandbox = [IO.Path]::GetFullPath((Join-Path $temporaryRoot ('HyperPet.ReleaseProcess-' + [guid]::NewGuid().ToString('N'))))
-if ((Split-Path $processSandbox -Parent) -ne [IO.Path]::TrimEndingDirectorySeparator($temporaryRoot)) { throw 'Unsafe process-test sandbox.' }
+if ((Split-Path $processSandbox -Parent) -ne $temporaryRoot.TrimEnd('\', '/')) { throw 'Unsafe process-test sandbox.' }
 New-Item -ItemType Directory (Join-Path $processSandbox 'tests'), (Join-Path $processSandbox 'scripts') | Out-Null
 try {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot '../scripts/ReleaseTools.psm1') -Destination (Join-Path $processSandbox 'scripts/ReleaseTools.psm1')
@@ -27,8 +27,13 @@ try {
 if (Test-Path variable:\LASTEXITCODE) { exit `$LASTEXITCODE }
 "@
         $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
-        $output = & (Join-Path $PSHOME 'pwsh.exe') -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1
-        $processExit = $LASTEXITCODE
+        # Windows PowerShell 5.1 turns redirected native stderr into a terminating
+        # error under 'Stop'; the expected-failure cases write to stderr.
+        $ErrorActionPreference = 'Continue'
+        try {
+            $output = & (Get-Process -Id $PID).Path -NoProfile -NonInteractive -EncodedCommand $encoded 2>&1
+            $processExit = $LASTEXITCODE
+        } finally { $ErrorActionPreference = 'Stop' }
         if ($case.ExpectedSuccess) {
             if ($processExit -ne 0) { throw "Successful suite returned process exit $processExit under the Actions wrapper." }
         } elseif ($processExit -eq 0) { throw "$($case.Name) was incorrectly reported as success." }
