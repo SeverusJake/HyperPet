@@ -6,7 +6,9 @@ public sealed class NotificationInbox
 {
     private readonly int _pendingLimit;
     private readonly int _historyLimit;
-    private readonly Queue<PetAlert> _pending = new();
+    // Newest-first display: the latest alert is always Current. Displaced
+    // alerts wait here, oldest first, and are revisited newest first.
+    private readonly List<PetAlert> _pending = new();
     private readonly List<NotificationHistoryEntry> _history = new();
 
     public NotificationInbox(int pendingLimit = 100, int historyLimit = 50)
@@ -23,7 +25,9 @@ public sealed class NotificationInbox
     public IReadOnlyList<NotificationHistoryEntry> History { get; }
     public event EventHandler? Changed;
 
-    public bool Enqueue(PetAlert alert, bool recordHistory = true)
+    /// <summary>Makes <paramref name="alert"/> current. The alert it displaces
+    /// waits behind it; when the wait list is full its oldest entry is dropped.</summary>
+    public void Enqueue(PetAlert alert, bool recordHistory = true)
     {
         ArgumentNullException.ThrowIfNull(alert);
 
@@ -36,25 +40,21 @@ public sealed class NotificationInbox
             }
         }
 
-        var startsCurrent = Current is null;
-        if (startsCurrent)
-        {
-            Current = alert;
-        }
-        else
+        if (Current is { } displaced)
         {
             if (_pending.Count == _pendingLimit)
             {
-                _pending.Dequeue();
+                _pending.RemoveAt(0);
             }
 
-            _pending.Enqueue(alert);
+            _pending.Add(displaced);
         }
 
+        Current = alert;
         Changed?.Invoke(this, EventArgs.Empty);
-        return startsCurrent;
     }
 
+    /// <summary>Drops the current alert and returns the newest waiting one, or null.</summary>
     public PetAlert? Advance()
     {
         if (Current is null && _pending.Count == 0)
@@ -62,7 +62,7 @@ public sealed class NotificationInbox
             return null;
         }
 
-        Current = _pending.TryDequeue(out var next) ? next : null;
+        Current = TakeNewestPending();
         Changed?.Invoke(this, EventArgs.Empty);
         return Current;
     }
@@ -92,10 +92,8 @@ public sealed class NotificationInbox
 
     public void RemoveSource(NotificationSource source)
     {
-        var retained = _pending.Where(alert => alert.Source != source).ToArray();
-        bool changed = retained.Length != _pending.Count || Current?.Source == source;
-        _pending.Clear(); foreach (var alert in retained) _pending.Enqueue(alert);
-        if (Current?.Source == source) Current = _pending.TryDequeue(out var next) ? next : null;
+        bool changed = _pending.RemoveAll(alert => alert.Source == source) > 0 || Current?.Source == source;
+        if (Current?.Source == source) Current = TakeNewestPending();
         if (changed) Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -108,12 +106,11 @@ public sealed class NotificationInbox
             changed |= !ReferenceEquals(Current, current);
         }
 
-        for (var i = _pending.Count; i > 0; i--)
+        for (var i = 0; i < _pending.Count; i++)
         {
-            var alert = _pending.Dequeue();
-            var redacted = Redact(alert);
-            _pending.Enqueue(redacted);
-            changed |= !ReferenceEquals(redacted, alert);
+            var redacted = Redact(_pending[i]);
+            changed |= !ReferenceEquals(redacted, _pending[i]);
+            _pending[i] = redacted;
         }
 
         for (var i = 0; i < _history.Count; i++)
@@ -131,6 +128,18 @@ public sealed class NotificationInbox
         {
             Changed?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private PetAlert? TakeNewestPending()
+    {
+        if (_pending.Count == 0)
+        {
+            return null;
+        }
+
+        var next = _pending[^1];
+        _pending.RemoveAt(_pending.Count - 1);
+        return next;
     }
 
     private static PetAlert Redact(PetAlert alert) =>

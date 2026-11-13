@@ -367,7 +367,6 @@ public sealed class InAppNotificationWatcher : IDisposable
             title: title,
             body: body,
             timestamp: DateTimeOffset.UtcNow,
-            canActivate: false,
             appUserModelId: appName, source: NotificationSource.InApp);
 
         _logger?.Info($"InApp popup detected proc='{processName}' hwnd={hwnd.ToInt64():X}");

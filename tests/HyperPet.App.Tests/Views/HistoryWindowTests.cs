@@ -23,8 +23,9 @@ public sealed class HistoryWindowTests
             ((Button)window.FindName("ReplayButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, inbox.PendingCount);
             Assert.Equal(2, inbox.History.Count);
-            inbox.Advance();
+            Assert.Equal("Second", inbox.Current!.Title);
             Assert.Equal("Second", inbox.Advance()!.Title);
+            Assert.Equal("First", inbox.Advance()!.Title);
         }
         finally { window.Close(); }
     });
@@ -65,5 +66,5 @@ public sealed class HistoryWindowTests
         finally { window.Close(); }
     });
 
-    private static PetAlert Alert(string title) => new("Zalo", title, "Secret body", DateTimeOffset.UtcNow, false);
+    private static PetAlert Alert(string title) => new("Zalo", title, "Secret body", DateTimeOffset.UtcNow);
 }

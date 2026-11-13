@@ -6,23 +6,25 @@ namespace HyperPet.Core.Tests.Notifications;
 public sealed class NotificationInboxTests
 {
     [Fact]
-    public void Enqueue_PreservesCurrentAndPromotesPendingInArrivalOrder()
+    public void Enqueue_MakesNewestCurrentAndRevisitsDisplacedNewestFirst()
     {
         var inbox = new NotificationInbox();
         var first = Alert("first");
         var second = Alert("second");
         var third = Alert("third");
 
-        Assert.True(inbox.Enqueue(first));
-        Assert.False(inbox.Enqueue(second));
-        Assert.False(inbox.Enqueue(third));
-
+        inbox.Enqueue(first);
         Assert.Equal(first, inbox.Current);
+        inbox.Enqueue(second);
+        Assert.Equal(second, inbox.Current);
+        inbox.Enqueue(third);
+
+        Assert.Equal(third, inbox.Current);
         Assert.Equal(2, inbox.PendingCount);
         Assert.Equal(second, inbox.Advance());
         Assert.Equal(second, inbox.Current);
         Assert.Equal(1, inbox.PendingCount);
-        Assert.Equal(third, inbox.Advance());
+        Assert.Equal(first, inbox.Advance());
         Assert.Null(inbox.Advance());
         Assert.Null(inbox.Current);
         Assert.Equal(0, inbox.PendingCount);
@@ -32,16 +34,16 @@ public sealed class NotificationInboxTests
     public void Enqueue_WhenPendingLimitReached_DiscardsOldestPending()
     {
         var inbox = new NotificationInbox(pendingLimit: 2);
-        var current = Alert("current");
-        inbox.Enqueue(current);
         inbox.Enqueue(Alert("discarded"));
         inbox.Enqueue(Alert("second"));
         inbox.Enqueue(Alert("third"));
+        var newest = Alert("newest");
+        inbox.Enqueue(newest);
 
-        Assert.Equal(current, inbox.Current);
+        Assert.Equal(newest, inbox.Current);
         Assert.Equal(2, inbox.PendingCount);
-        Assert.Equal("second", inbox.Advance()!.Title);
         Assert.Equal("third", inbox.Advance()!.Title);
+        Assert.Equal("second", inbox.Advance()!.Title);
         Assert.Null(inbox.Advance());
     }
 
@@ -49,15 +51,14 @@ public sealed class NotificationInboxTests
     public void Enqueue_DefaultPendingLimit_KeepsNewestHundred()
     {
         var inbox = new NotificationInbox();
-        inbox.Enqueue(Alert("current"));
-        for (var i = 0; i <= 100; i++)
+        for (var i = 0; i <= 101; i++)
         {
             inbox.Enqueue(Alert(i.ToString()));
         }
 
+        Assert.Equal("101", inbox.Current!.Title);
         Assert.Equal(100, inbox.PendingCount);
-        Assert.Equal("1", inbox.Advance()!.Title);
-        for (var i = 2; i <= 100; i++)
+        for (var i = 100; i >= 1; i--)
         {
             Assert.Equal(i.ToString(), inbox.Advance()!.Title);
         }
@@ -102,7 +103,7 @@ public sealed class NotificationInboxTests
         var entry = Assert.Single(inbox.History);
         inbox.Clear();
 
-        Assert.True(inbox.Enqueue(entry.Alert, recordHistory: false));
+        inbox.Enqueue(entry.Alert, recordHistory: false);
 
         Assert.Equal(alert, inbox.Current);
         Assert.Equal(entry, Assert.Single(inbox.History));
@@ -121,7 +122,8 @@ public sealed class NotificationInboxTests
         Assert.Equal(0, inbox.PendingCount);
         Assert.Null(inbox.Advance());
         Assert.Equal(2, inbox.History.Count);
-        Assert.True(inbox.Enqueue(Alert("third")));
+        inbox.Enqueue(Alert("third"));
+        Assert.Equal("third", inbox.Current!.Title);
     }
 
     [Fact]
@@ -134,9 +136,9 @@ public sealed class NotificationInboxTests
         inbox.ClearHistory();
 
         Assert.Empty(inbox.History);
-        Assert.Equal("first", inbox.Current!.Title);
+        Assert.Equal("second", inbox.Current!.Title);
         Assert.Equal(1, inbox.PendingCount);
-        Assert.Equal("second", inbox.Advance()!.Title);
+        Assert.Equal("first", inbox.Advance()!.Title);
         Assert.Empty(inbox.History);
     }
 
@@ -171,12 +173,12 @@ public sealed class NotificationInboxTests
 
         inbox.RedactContent();
 
-        Assert.Equal(first with { Title = "Notification", Body = "" }, inbox.Current);
+        Assert.Equal(second with { Title = "Notification", Body = "" }, inbox.Current);
         Assert.Equal(ids, inbox.History.Select(entry => entry.Id));
         Assert.Equal(second with { Title = "Notification", Body = "" }, inbox.History[0].Alert);
         Assert.Equal(first with { Title = "Notification", Body = "" }, inbox.History[1].Alert);
         Assert.Equal(1, changes);
-        Assert.Equal(second with { Title = "Notification", Body = "" }, inbox.Advance());
+        Assert.Equal(first with { Title = "Notification", Body = "" }, inbox.Advance());
         Assert.All(inbox.History, entry => Assert.Equal("Notification", entry.Alert.Title));
         inbox.Clear();
         inbox.Enqueue(inbox.History[1].Alert, recordHistory: false);
@@ -209,9 +211,9 @@ public sealed class NotificationInboxTests
         Assert.Equal(new (string?, int, int)[]
         {
             ("first", 0, 1),
-            ("first", 1, 2),
-            ("second", 0, 2),
-            ("second", 0, 0),
+            ("second", 1, 2),
+            ("first", 0, 2),
+            ("first", 0, 0),
             ("Notification", 0, 0),
             (null, 0, 0),
         }, states);
@@ -245,5 +247,5 @@ public sealed class NotificationInboxTests
 
     private static PetAlert Alert(string title) => new(
         "Chat", title, $"Private body for {title}",
-        DateTimeOffset.Parse("2026-11-11T10:00:00+07:00"), true, "Chat.App");
+        DateTimeOffset.Parse("2026-11-11T10:00:00+07:00"), "Chat.App");
 }

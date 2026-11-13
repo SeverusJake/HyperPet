@@ -89,8 +89,8 @@ public sealed class NotificationPlacementWindowTests
             window.Show();
             string body = string.Join("\n", Enumerable.Repeat("Long message to read completely.", 100)) + " END";
             string title = string.Join(" ", Enumerable.Repeat("Long title", 20));
+            window.ShowAlert(Alert("Earlier message"));
             window.ShowAlert(Alert(title, body));
-            window.ShowAlert(Alert("Next message"));
             Flush(window);
             var scroll = Assert.IsType<ScrollViewer>(window.FindName("BubbleContentScrollViewer"));
             Assert.True(scroll.ScrollableHeight > 0);
@@ -114,7 +114,7 @@ public sealed class NotificationPlacementWindowTests
             {
                 RoutedEvent = UIElement.MouseDownEvent
             });
-            Assert.Equal("Second", ((TextBlock)window.FindName("BubbleTitle")).Text);
+            Assert.Equal("First", ((TextBlock)window.FindName("BubbleTitle")).Text);
         }
         finally { window.Close(); }
     });
@@ -125,7 +125,7 @@ public sealed class NotificationPlacementWindowTests
         var window = CreateWindow();
         try
         {
-            window.Show(); window.ShowAlert(Alert("First", new string('x', 5000))); window.ShowAlert(Alert("Second")); Flush(window);
+            window.Show(); window.ShowAlert(Alert("Second")); window.ShowAlert(Alert("First", new string('x', 5000))); Flush(window);
             var scroll = (ScrollViewer)window.FindName("BubbleContentScrollViewer");
             scroll.ApplyTemplate();
             var bar = Assert.IsType<System.Windows.Controls.Primitives.ScrollBar>(scroll.Template.FindName("PART_VerticalScrollBar", scroll));
@@ -155,7 +155,7 @@ public sealed class NotificationPlacementWindowTests
         var window = CreateWindow();
         try
         {
-            window.Show(); window.ShowAlert(Alert()); window.ShowAlert(Alert("Next message")); Flush(window);
+            window.Show(); window.ShowAlert(Alert("Next message")); window.ShowAlert(Alert()); Flush(window);
             var notification = Window.GetWindow((Border)window.FindName("Bubble"));
             Assert.NotSame(window, notification);
             notification.Close(); Flush(window);
@@ -229,10 +229,10 @@ public sealed class NotificationPlacementWindowTests
             var bubble = (Border)window.FindName("Bubble");
             bubble.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
             Pump(TimeSpan.FromMilliseconds(1150));
-            Assert.Equal("First", ((TextBlock)window.FindName("BubbleTitle")).Text);
+            Assert.Equal("Second", ((TextBlock)window.FindName("BubbleTitle")).Text);
             window.DismissAlert();
             Pump(TimeSpan.FromMilliseconds(1150));
-            Assert.Equal("Second", ((TextBlock)window.FindName("BubbleTitle")).Text);
+            Assert.Equal("First", ((TextBlock)window.FindName("BubbleTitle")).Text);
             bubble.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
             Pump(TimeSpan.FromMilliseconds(1150));
             Assert.Equal(Visibility.Collapsed, bubble.Visibility);
@@ -285,5 +285,5 @@ public sealed class NotificationPlacementWindowTests
     }
 
     private static PetAlert Alert(string title = "Message", string body = "Body")
-        => new("Zalo", title, body, DateTimeOffset.Now, false);
+        => new("Zalo", title, body, DateTimeOffset.Now);
 }

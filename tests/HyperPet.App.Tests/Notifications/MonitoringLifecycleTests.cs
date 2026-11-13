@@ -84,7 +84,7 @@ public sealed class MonitoringLifecycleTests
 
     private sealed class FakeListener : INotificationListener
     {
-        internal static readonly HyperNotification Notification = new("id", "app", "title", "body", DateTimeOffset.UtcNow, false);
+        internal static readonly HyperNotification Notification = new("id", "app", "title", "body", DateTimeOffset.UtcNow);
         public readonly TaskCompletionSource<NotificationAccessStatus> Access = new();
         public readonly TaskCompletionSource<IReadOnlyList<HyperNotification>> Poll = new();
         public int Requests, Starts, Stops;

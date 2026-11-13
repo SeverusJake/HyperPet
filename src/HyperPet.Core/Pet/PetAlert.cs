@@ -5,5 +5,4 @@ public sealed record PetAlert(
     string Title,
     string Body,
     DateTimeOffset Timestamp,
-    bool CanActivate,
     string AppUserModelId = "", HyperPet.Core.Notifications.NotificationSource Source = HyperPet.Core.Notifications.NotificationSource.Windows);

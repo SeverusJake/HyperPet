@@ -75,7 +75,7 @@ public sealed class TuckAwayTests
         finally { window.Close(); }
     });
 
-    private static PetAlert CreateAlert() => new("Zalo", "Test", "Message", DateTimeOffset.UtcNow, false);
+    private static PetAlert CreateAlert() => new("Zalo", "Test", "Message", DateTimeOffset.UtcNow);
 
     private static SpritePet CreatePet(int frameCount = 2, bool failedLoop = false, bool hasFailed = true)
     {

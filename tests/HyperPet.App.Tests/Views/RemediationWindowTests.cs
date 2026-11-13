@@ -56,7 +56,7 @@ public sealed class RemediationWindowTests
         try
         {
             window.Show();
-            window.ShowAlert(new PetAlert("App", "Title", "Body", DateTimeOffset.UtcNow, false));
+            window.ShowAlert(new PetAlert("App", "Title", "Body", DateTimeOffset.UtcNow));
             var bubble = (Border)window.FindName("Bubble");
             bubble.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseEnterEvent });
             settings.QuietHoursEnabled = true;

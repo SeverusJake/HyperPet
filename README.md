@@ -22,7 +22,7 @@ For every new release, both distribution downloads must include the version:
 - `HyperPet-vX.Y.Z-win-Setup.exe`
 - `HyperPet-vX.Y.Z-win-Portable.zip`
 
-`pack.ps1 -Version X.Y.Z -PackDirectory <published-app> -OutputDirectory <empty-output>` creates versioned downloads in isolated output. Restore the pinned CLI with `dotnet tool restore` first.
+`pack.ps1 -Version X.Y.Z -PackDirectory <published-app> -OutputDirectory <empty-output>` creates versioned downloads in isolated output. Restore the pinned CLI with `dotnet tool restore` first. Pass `-PreviousPackage <HyperPet-X.Y.Z-full.nupkg>` (the previous release's full package) to `pack.ps1` or `release.ps1` to also build the delta update package; without it, updates download the full package.
 
 `release.ps1 -Version X.Y.Z -BuildOnly` verifies tests/audit and creates artifacts, SHA256SUMS.txt and build-manifest.json from a **clean commit whose project version already matches**. It never edits/commits source, creates tags, or pushes branches. Publication requires the explicit `-Publish` flag and an existing remote tag pointing at that exact commit. Keep Velopack update package/manifest names unchanged. Preview builds from an uncommitted working tree are for local verification only.
 
@@ -38,7 +38,7 @@ dotnet test HyperPet.sln
 dotnet run --project src/HyperPet.App/HyperPet.App.csproj
 ```
 
-`dotnet run` is useful for UI smoke testing. Real Windows notification listener permission requires an MSIX/package identity with the `userNotificationListener` capability declared in `src/HyperPet.App/Package.appxmanifest`.
+`dotnet run` is useful for UI smoke testing. Windows notification-listener access may be unavailable without package identity; see Notification Access below.
 
 ## Startup and Position
 
@@ -56,9 +56,12 @@ monitor under the cursor. Refresh updates the monitor list in Settings.
 
 ## Notification Queue and History
 
-Notifications wait their turn instead of replacing the current speech bubble.
-Click the notification to advance early; clicking the last notification closes it. At most
-100 pending alerts are retained; if full, the oldest pending alert is dropped.
+The newest notification is always the one shown: a new arrival replaces the
+bubble immediately, and the one it displaced waits behind it. Click the
+notification (or let it expire) to go back to the previous one, newest first;
+clicking the last one closes the bubble. At most 100 earlier alerts wait; if
+full, the oldest is dropped. Windows notifications that arrived before HyperPet
+started (or before Windows notifications were re-enabled) are not shown.
 
 The notification automatically chooses space above, right, left, or below the
 pet and stays within its monitor's work area. It follows the pet without

@@ -35,6 +35,7 @@ public partial class App : Application
     private Func<Task>? _enableWindowsMonitoring;
     private MonitoringLifecycle? _windowsLifecycle;
     private int _inAppDeliveryGeneration;
+    private readonly NotificationBacklog _backlog = new();
     private SetupWindow? _setupWindow;
     private INotificationListener? _notificationListener;
     private InAppNotificationWatcher? _inAppWatcher;
@@ -365,7 +366,7 @@ public partial class App : Application
         PetController petController,
         HyperPetSettings settings)
     {
-        if (!notificationDedupe.ShouldAlert(notification))
+        if (_backlog.IsBacklog(notification) || !notificationDedupe.ShouldAlert(notification))
         {
             return;
         }
@@ -417,6 +418,8 @@ public partial class App : Application
         HyperPetSettings settings)
     {
         if (_shutdownCts.IsCancellationRequested) return;
+        // Toasts that arrived before this point were already seen by the user.
+        if (_monitorTimer is null || !_monitorTimer.IsEnabled) _backlog.Reset();
         if (_monitorTimer is not null)
         {
             notificationListener.StartListening(); _monitorTimer.Start(); return;

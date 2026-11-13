@@ -62,7 +62,7 @@ public sealed class NotificationQueueWindowTests
             {
                 RoutedEvent = UIElement.MouseLeftButtonDownEvent
             });
-            Assert.Equal("Second", ((TextBlock)window.FindName("BubbleTitle")).Text);
+            Assert.Equal("First", ((TextBlock)window.FindName("BubbleTitle")).Text);
             Assert.Equal(Visibility.Visible, bubble.Visibility);
             bubble.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
             {
@@ -85,25 +85,25 @@ public sealed class NotificationQueueWindowTests
             var button = Assert.IsType<Button>(window.FindName("HistoryAlertButton"));
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Single(window.OwnedWindows.Cast<Window>().OfType<HyperPet.App.Views.HistoryWindow>());
-            Assert.Equal("First", ((TextBlock)window.FindName("BubbleTitle")).Text);
-            window.DismissAlert();
             Assert.Equal("Second", ((TextBlock)window.FindName("BubbleTitle")).Text);
+            window.DismissAlert();
+            Assert.Equal("First", ((TextBlock)window.FindName("BubbleTitle")).Text);
         }
         finally { window.Close(); }
     });
 
     [Fact]
-    public Task Alerts_WaitTheirTurn_AndDismissAdvancesQueue() => StaThread.RunAsync(() =>
+    public Task NewestAlert_ShowsImmediately_AndDismissReturnsToEarlier() => StaThread.RunAsync(() =>
     {
         var window = new MainWindow(new HyperPetSettings(), _ => { }, () => { }, null);
         try
         {
             window.ShowAlert(Alert("First"));
             window.ShowAlert(Alert("Second"));
-            Assert.Equal("First", ((TextBlock)window.FindName("BubbleTitle")).Text);
+            Assert.Equal("Second", ((TextBlock)window.FindName("BubbleTitle")).Text);
 
             window.DismissAlert();
-            Assert.Equal("Second", ((TextBlock)window.FindName("BubbleTitle")).Text);
+            Assert.Equal("First", ((TextBlock)window.FindName("BubbleTitle")).Text);
             window.DismissAlert();
             Assert.Equal(Visibility.Collapsed, ((Border)window.FindName("Bubble")).Visibility);
         }
@@ -130,7 +130,7 @@ public sealed class NotificationQueueWindowTests
         finally { window.Close(); }
     });
 
-    private static PetAlert Alert(string title) => new("Zalo", title, "Body", DateTimeOffset.UtcNow, false);
+    private static PetAlert Alert(string title) => new("Zalo", title, "Body", DateTimeOffset.UtcNow);
 
     [Fact]
     public Task PrivacyChange_RedactsCurrentAndPendingContent() => StaThread.RunAsync(() =>

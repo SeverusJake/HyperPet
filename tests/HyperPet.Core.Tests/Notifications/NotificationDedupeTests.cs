@@ -39,7 +39,6 @@ public sealed class NotificationDedupeTests
             "Discord",
             "Friend",
             "hello",
-            DateTimeOffset.Parse("2026-05-14T10:00:00+07:00"),
-            canActivate: true);
+            DateTimeOffset.Parse("2026-05-14T10:00:00+07:00"));
     }
 }

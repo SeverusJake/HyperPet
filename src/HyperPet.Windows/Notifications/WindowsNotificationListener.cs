@@ -199,7 +199,6 @@ public sealed class WindowsNotificationListener : INotificationListener
                 title,
                 body,
                 notification.CreationTime,
-                canActivate: false,
                 appUserModelId: appUserModelId);
         }
         catch (Exception exception)

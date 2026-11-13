@@ -22,6 +22,27 @@ public sealed class PopupOccurrenceTests
         Assert.NotNull(tracker.Observe(new IntPtr(1), "ready", "message"));
     }
     [Fact]
+    public void UnreadablePopup_IsReportedOnce_AfterConsecutiveEmptyScans()
+    {
+        var tracker = new PopupOccurrenceTracker();
+        for (int scan = 1; scan < PopupOccurrenceTracker.EmptyScansBeforeFallback; scan++)
+            Assert.Null(tracker.Observe(new IntPtr(1), "", ""));
+        Assert.NotNull(tracker.Observe(new IntPtr(1), "", ""));
+        Assert.Null(tracker.Observe(new IntPtr(1), "", ""));
+        // Text that turns readable later is the same popup, not a second alert.
+        Assert.Null(tracker.Observe(new IntPtr(1), "sender", "late text"));
+        Assert.NotNull(tracker.Observe(new IntPtr(1), "sender", "next message"));
+    }
+    [Fact]
+    public void ReadableTextBeforeFallback_AlertsWithContentOnly()
+    {
+        var tracker = new PopupOccurrenceTracker();
+        Assert.Null(tracker.Observe(new IntPtr(1), "", ""));
+        Assert.NotNull(tracker.Observe(new IntPtr(1), "sender", "text"));
+        Assert.Null(tracker.Observe(new IntPtr(1), "", ""));
+        Assert.Null(tracker.Observe(new IntPtr(1), "", ""));
+    }
+    [Fact]
     public async Task AutomationWork_RunsOnMtaAndSerializes()
     {
         using var worker = new AutomationWorker(); int current = 0, maximum = 0;

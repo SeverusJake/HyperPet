@@ -21,7 +21,7 @@ public sealed class DedupeLifetimeTests
         time.Now += TimeSpan.FromMinutes(2);
         Assert.True(dedupe.ShouldAlert(Notification("a")));
     }
-    private static HyperNotification Notification(string id) => new(id, "App", "Title", "Body", DateTimeOffset.UtcNow, false);
+    private static HyperNotification Notification(string id) => new(id, "App", "Title", "Body", DateTimeOffset.UtcNow);
     private sealed class Clock : TimeProvider
     {
         public DateTimeOffset Now = DateTimeOffset.UtcNow;

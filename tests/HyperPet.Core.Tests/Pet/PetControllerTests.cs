@@ -15,17 +15,15 @@ public sealed class PetControllerTests
 
         var alert = controller.HandleNotification(notification, settings);
 
-        Assert.Equal(PetState.Alerting, controller.State);
         Assert.NotNull(alert);
         Assert.Equal("Discord", alert.AppName);
         Assert.Equal("Friend", alert.Title);
         Assert.Equal("hello from discord", alert.Body);
-        Assert.True(alert.CanActivate);
         Assert.Equal("Discord.Discord", alert.AppUserModelId);
     }
 
     [Fact]
-    public void HandleNotification_WhenAlertsPaused_ReturnsNullAndKeepsIdle()
+    public void HandleNotification_WhenAlertsPaused_ReturnsNull()
     {
         var controller = new PetController();
         var settings = HyperPetSettings.CreateDefault();
@@ -34,7 +32,6 @@ public sealed class PetControllerTests
         var alert = controller.HandleNotification(CreateNotification(), settings);
 
         Assert.Null(alert);
-        Assert.Equal(PetState.Idle, controller.State);
     }
 
     [Fact]
@@ -50,7 +47,6 @@ public sealed class PetControllerTests
         var alert = controller.HandleNotification(CreateNotification(), settings);
 
         Assert.Null(alert);
-        Assert.Equal(PetState.Idle, controller.State);
     }
 
     [Fact]
@@ -66,7 +62,6 @@ public sealed class PetControllerTests
         var alert = controller.HandleNotification(CreateNotification(), settings);
 
         Assert.NotNull(alert);
-        Assert.Equal(PetState.Alerting, controller.State);
     }
 
     [Fact]
@@ -110,7 +105,6 @@ public sealed class PetControllerTests
         var alert = controller.HandleNotification(CreateNotification(), settings);
 
         Assert.Null(alert);
-        Assert.Equal(PetState.Idle, controller.State);
     }
 
     [Fact]
@@ -125,7 +119,6 @@ public sealed class PetControllerTests
             "Boss",
             "ping",
             DateTimeOffset.UtcNow,
-            canActivate: false,
             appUserModelId: "Microsoft.Office.OUTLOOK");
 
         var alert = controller.HandleNotification(notification, settings);
@@ -144,18 +137,6 @@ public sealed class PetControllerTests
         Assert.NotNull(alert);
     }
 
-    [Fact]
-    public void DismissAlert_ReturnsToIdle()
-    {
-        var controller = new PetController();
-        controller.HandleNotification(CreateNotification(), HyperPetSettings.CreateDefault());
-
-        controller.DismissAlert();
-
-        Assert.Equal(PetState.Idle, controller.State);
-        Assert.Null(controller.CurrentAlert);
-    }
-
     private static HyperNotification CreateNotification()
     {
         return new HyperNotification(
@@ -164,7 +145,6 @@ public sealed class PetControllerTests
             "Friend",
             "hello from discord",
             DateTimeOffset.Parse("2026-05-14T10:00:00+07:00"),
-            canActivate: true,
             appUserModelId: "Discord.Discord");
     }
 }

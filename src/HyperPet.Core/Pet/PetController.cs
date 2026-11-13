@@ -12,10 +12,6 @@ public sealed class PetController
         _clock = clock ?? (() => DateTime.Now);
     }
 
-    public PetState State { get; private set; } = PetState.Idle;
-
-    public PetAlert? CurrentAlert { get; private set; }
-
     public PetAlert? HandleNotification(HyperNotification notification, HyperPetSettings settings)
     {
         if (settings.AlertsPaused)
@@ -46,24 +42,12 @@ public sealed class PetController
         var title = settings.ShowFullNotificationContent ? notification.Title : "Notification";
         var body = settings.ShowFullNotificationContent ? notification.Body : string.Empty;
 
-        var alert = new PetAlert(
+        return new PetAlert(
             notification.AppName,
             title,
             body,
             notification.Timestamp,
-            notification.CanActivate,
             notification.AppUserModelId, notification.Source);
-
-        CurrentAlert = alert;
-        State = PetState.Alerting;
-
-        return alert;
-    }
-
-    public void DismissAlert()
-    {
-        CurrentAlert = null;
-        State = PetState.Idle;
     }
 
     private static MessagingAppRule? FindMatchingRule(IEnumerable<MessagingAppRule>? rules, HyperNotification notification)

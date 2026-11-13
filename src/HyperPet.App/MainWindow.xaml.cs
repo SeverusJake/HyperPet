@@ -21,7 +21,6 @@ namespace HyperPet.App;
 
 public partial class MainWindow : Window
 {
-    private readonly MainWindowViewModel _viewModel;
     private readonly HyperPetSettings _settings;
     private readonly Action<bool> _applyStartupSetting;
     private readonly bool _canManageStartup;
@@ -127,11 +126,6 @@ public partial class MainWindow : Window
         PauseAlertsMenuItem.IsChecked = settings.AlertsPaused;
         VersionMenuItem.Header = AppVersion.DisplayString;
 
-        _viewModel = new MainWindowViewModel
-        {
-            AlertsPaused = settings.AlertsPaused
-        };
-        DataContext = _viewModel;
 
         _alertTimer.Tick += (_, _) => DismissAlert();
         _quietHoursTimer.Tick += (_, _) => { if (!CanShowAlerts() && _alertActive) DismissAlert(); };
@@ -649,7 +643,7 @@ public partial class MainWindow : Window
         }
 
         // First phase ("wait-min"): now schedule the second phase — let the
-        // current waiting cycle play to frame 8, then go idle.
+        // current waiting cycle play to its last frame, then go idle.
         if ((string?)_hoverExitTimer.Tag == "wait-min")
         {
             TimeSpan untilEnd = TimeUntilCycleEnd();
@@ -659,7 +653,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Second phase: cycle is at frame 8 (or past) → idle + resume calm.
+        // Second phase: the cycle has reached its last frame → idle + resume calm.
         _hoverActive = false;
         _hoverExitTimer.Tag = null;
         StartBehaviorMode();
@@ -739,9 +733,7 @@ public partial class MainWindow : Window
     private void OnPauseAlertsClick(object sender, RoutedEventArgs e)
     {
         _settings.AlertsPaused = PauseAlertsMenuItem.IsChecked;
-        _viewModel.AlertsPaused = _settings.AlertsPaused;
-
-        if (_viewModel.AlertsPaused)
+        if (_settings.AlertsPaused)
         {
             DismissAlert();
         }
@@ -902,13 +894,7 @@ public partial class MainWindow : Window
 
             settingsWindow.WindowStartupLocation = WindowStartupLocation.Manual;
 
-            DpiScale dpi = VisualTreeHelper.GetDpi(this);
-            WorkArea? monitor = MonitorWorkArea.ForPoint(
-                Left + GetWindowWidth() / 2, Top + GetWindowHeight() / 2,
-                dpi.DpiScaleX, dpi.DpiScaleY);
-
-            Rect primary = SystemParameters.WorkArea;
-            WorkArea wa = monitor ?? new WorkArea(primary.Left, primary.Top, primary.Right, primary.Bottom);
+            WorkArea wa = GetWorkArea(Left, Top);
 
             settingsWindow.MaxHeight = Math.Max(1, wa.Bottom - wa.Top);
             settingsWindow.MaxWidth = Math.Max(1, wa.Right - wa.Left);

@@ -25,7 +25,10 @@ public partial class MainWindow
         {
             alert = alert with { Title = "Notification", Body = string.Empty };
         }
-        if (_notificationInbox.Enqueue(alert, recordHistory)) { PresentAlert(alert); }
+        // Newest first: the arriving alert replaces the bubble; the one it
+        // displaced waits and returns when this one is dismissed or expires.
+        _notificationInbox.Enqueue(alert, recordHistory);
+        PresentAlert(alert);
         return true;
     }
 
@@ -38,7 +41,6 @@ public partial class MainWindow
 
     private void PresentAlert(PetAlert alert)
     {
-        _viewModel.CurrentAlert = alert;
         _alertActive = true;
         _debugTotalAlerts++;
         UpdateDebugOverlay();
@@ -55,7 +57,6 @@ public partial class MainWindow
 
     private void UpdateBubbleContent(PetAlert alert)
     {
-        _viewModel.CurrentAlert = alert;
         BubbleAppName.Text = alert.AppName;
         BubbleTitle.Text = alert.Title;
         BubbleBody.Text = alert.Body;
@@ -73,7 +74,6 @@ public partial class MainWindow
             PresentAlert(next);
             return;
         }
-        _viewModel.CurrentAlert = null;
         _alertActive = false;
         Bubble.Visibility = Visibility.Collapsed;
         HideNotificationWindow();
@@ -85,15 +85,14 @@ public partial class MainWindow
 
     private void OnInboxChanged(object? sender, EventArgs e)
     {
-        PendingAlertsText.Text = _notificationInbox.PendingCount > 0 ? $"Queued: {_notificationInbox.PendingCount}" : string.Empty;
+        PendingAlertsText.Text = _notificationInbox.PendingCount > 0 ? $"Earlier: {_notificationInbox.PendingCount}" : string.Empty;
         PendingAlertsText.Visibility = _notificationInbox.PendingCount > 0 ? Visibility.Visible : Visibility.Collapsed;
-        Bubble.ToolTip = _notificationInbox.PendingCount > 0 ? "Click for next notification" : "Click to dismiss";
+        Bubble.ToolTip = _notificationInbox.PendingCount > 0 ? "Click for the previous notification" : "Click to dismiss";
         UpdateNotificationPlacement();
     }
 
     internal void RefreshNotificationPreferences()
     {
-        _viewModel.AlertsPaused = _settings.AlertsPaused;
         var previous = _notificationInbox.Current;
         if (!_settings.ReactToWindowsNotifications) _notificationInbox.RemoveSource(NotificationSource.Windows);
         if (!_settings.ReactToInAppNotifications) _notificationInbox.RemoveSource(NotificationSource.InApp);

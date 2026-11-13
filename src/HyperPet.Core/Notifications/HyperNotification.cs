@@ -8,7 +8,6 @@ public sealed record HyperNotification
         string title,
         string body,
         DateTimeOffset timestamp,
-        bool canActivate,
         string appUserModelId = "", NotificationSource source = NotificationSource.Windows)
     {
         SourceId = sourceId;
@@ -16,7 +15,6 @@ public sealed record HyperNotification
         Title = title;
         Body = body;
         Timestamp = timestamp;
-        CanActivate = canActivate;
         AppUserModelId = appUserModelId ?? string.Empty;
         Source = source;
     }
@@ -30,8 +28,6 @@ public sealed record HyperNotification
     public string Body { get; init; }
 
     public DateTimeOffset Timestamp { get; init; }
-
-    public bool CanActivate { get; init; }
 
     public string AppUserModelId { get; init; }
     public NotificationSource Source { get; init; }
