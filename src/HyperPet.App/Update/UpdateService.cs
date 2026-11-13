@@ -19,10 +19,15 @@ public sealed class UpdateService
     public UpdateService(HyperPetLogger? logger = null)
     {
         _logger = logger;
-        // Public repo: no access token, stable releases only (prerelease=false).
-        var source = new GithubSource(RepoUrl, null, false);
-        _manager = new UpdateManager(source);
+        _manager = new UpdateManager(CreateSource());
     }
+
+    // GitHub's stable/latest asset redirect avoids the unauthenticated REST
+    // API quota. Keep an explicit SimpleWebSource so provider auto-detection
+    // cannot switch this back to GithubSource. Both feed and package downloads
+    // use public release assets; no token is shipped in the app.
+    internal static IUpdateSource CreateSource(IFileDownloader? downloader = null) =>
+        new SimpleWebSource(RepoUrl + "/releases/latest/download/", downloader);
 
     /// <summary>
     /// False when running from a raw build / dotnet run (not installed via
