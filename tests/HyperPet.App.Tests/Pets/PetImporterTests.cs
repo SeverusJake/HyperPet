@@ -31,7 +31,11 @@ public class PetImporterTests : IDisposable
               "states": { "idle": { "row": 0, "frames": 1, "fps": 1, "loop": true } }
             }
             """);
-        File.WriteAllBytes(Path.Combine(dir, sheet), new byte[] { 1, 2, 3 });
+        using var bitmap = new SkiaSharp.SKBitmap(192, 208);
+        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        using var output = File.Create(Path.Combine(dir, sheet));
+        data.SaveTo(output);
     }
 
     [Fact]

@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private readonly MainWindowViewModel _viewModel;
     private readonly HyperPetSettings _settings;
     private readonly Action<bool> _applyStartupSetting;
+    private readonly bool _canManageStartup;
     private readonly Action _saveSettings;
     private readonly Action _requestShutdown;
     private readonly Action<TimeSpan>? _setPollInterval;
@@ -31,10 +32,11 @@ public partial class MainWindow : Window
     private readonly DebugNotificationSimulator? _debugSimulator;
     private readonly Action? _applyMonitoringSettings;
     private readonly UpdateService? _updateService;
-    private readonly IReadOnlyList<PetCatalogEntry> _petCatalog;
+    private IReadOnlyList<PetCatalogEntry> _petCatalog;
     private readonly Func<string, Task<SpritePet?>>? _petLoader;
     private readonly string _userPetsRoot;
     private readonly Func<Task<IReadOnlyList<PetCatalogEntry>>>? _rediscoverPets;
+    private readonly DispatcherTimer _quietHoursTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _alertTimer = new();
     private readonly DispatcherTimer _calmTimer = new();
     private readonly DispatcherTimer _movementTimer = new();
@@ -87,7 +89,6 @@ public partial class MainWindow : Window
         SpritePet? spritePet,
         IReadOnlyDictionary<string, int>? originalStateFps = null,
         IReadOnlyDictionary<string, PlayMode>? originalStatePlayMode = null,
-        IAppLauncher? appLauncher = null,
         Action<TimeSpan>? setPollInterval = null,
         Action<TimeSpan>? pollSoon = null,
         DebugNotificationSimulator? debugSimulator = null,
@@ -98,10 +99,11 @@ public partial class MainWindow : Window
         string? userPetsRoot = null,
         Func<Task<IReadOnlyList<PetCatalogEntry>>>? rediscoverPets = null,
         Action? requestShutdown = null,
-        Func<IReadOnlyList<DesktopMonitor>>? monitorProvider = null)
+        Func<IReadOnlyList<DesktopMonitor>>? monitorProvider = null, bool canManageStartup = true)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
+        _canManageStartup = canManageStartup;
         _saveSettings = saveSettings;
         _requestShutdown = requestShutdown ?? (() => Application.Current.Shutdown());
         _monitorProvider = monitorProvider ?? DesktopMonitors.Enumerate;
@@ -132,11 +134,15 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
 
         _alertTimer.Tick += (_, _) => DismissAlert();
+        _quietHoursTimer.Tick += (_, _) => { if (!CanShowAlerts() && _alertActive) DismissAlert(); };
         _notificationInbox.Changed += OnInboxChanged;
         OnInboxChanged(this, EventArgs.Empty);
         _tuckAwayTimer.Tick += (_, _) => FinishTuckAway();
         Closed += (_, _) =>
         {
+            _closed = true;
+            _settingsWindow?.Close();
+            ++_petReloadGeneration;
             CloseNotificationWindow();
             StopMonitorTracking();
             _historyWindow?.Close();
@@ -145,6 +151,7 @@ public partial class MainWindow : Window
             _notificationInbox.ClearHistory();
             StopBehaviorTimers();
             StopInteractionTimers();
+            _quietHoursTimer.Stop();
             _alertTimer.Stop();
             _debugOverlayTimer.Stop();
             _tuckAwayTimer.Stop();
@@ -160,6 +167,7 @@ public partial class MainWindow : Window
         HelpOverlayText.Text = BuildHelpText();
         Loaded += (_, _) =>
         {
+            _quietHoursTimer.Start();
             StartMonitorTracking();
             RestorePetPosition();
             UpdateNotificationPlacement();
@@ -249,14 +257,15 @@ public partial class MainWindow : Window
                 {
                     DpiScale dpi = VisualTreeHelper.GetDpi(this);
                     return (dpi.DpiScaleX, dpi.DpiScaleY);
-                }) { PetHeight = GetWindowHeight() };
+                }) { PetHeight = GetSpriteBounds().Height };
             _roamController = new DesktopRoamController(provider, _random);
         }
 
-        _roamController.PetWidth = GetWindowWidth();
-        _roamController.PetHeight = GetWindowHeight();
+        Rect spriteBounds = GetSpriteBounds();
+        _roamController.PetWidth = spriteBounds.Width;
+        _roamController.PetHeight = spriteBounds.Height;
         _roamController.WalkSpeed = Math.Clamp(_settings.RunningSpeed, 1, 20);
-        _roamController.Start(Left, Top);
+        _roamController.Start(Left + spriteBounds.Left, Top + spriteBounds.Top);
         _lastRoamAnimation = string.Empty;
 
         _movementTimer.Interval = TimeSpan.FromMilliseconds(33);
@@ -289,18 +298,19 @@ public partial class MainWindow : Window
         }
 
         WorkArea workArea = GetWorkArea(Left, Top);
-        double windowWidth = GetWindowWidth();
+        Rect sprite = GetSpriteBounds();
+        double windowWidth = sprite.Width;
         int speed = Math.Clamp(_settings.RunningSpeed, 1, 20);
         double nextLeft = Left + (_movingRight ? speed : -speed);
 
-        if (nextLeft <= workArea.Left)
+        if (nextLeft + sprite.Left <= workArea.Left)
         {
-            nextLeft = workArea.Left;
+            nextLeft = workArea.Left - sprite.Left;
             SetMovementDirection(true);
         }
-        else if (nextLeft + windowWidth >= workArea.Right)
+        else if (nextLeft + sprite.Left + windowWidth >= workArea.Right)
         {
-            nextLeft = workArea.Right - windowWidth;
+            nextLeft = workArea.Right - windowWidth - sprite.Left;
             SetMovementDirection(false);
         }
 
@@ -315,8 +325,9 @@ public partial class MainWindow : Window
         }
 
         _roamController.Tick();
-        Left = _roamController.X;
-        Top = _roamController.Y;
+        Point origin = PetGeometry.WindowOriginForSprite(new Point(_roamController.X, _roamController.Y), GetSpriteBounds());
+        Left = origin.X;
+        Top = origin.Y;
         ClampToWorkArea();
 
         if (_roamController.CurrentAnimation != _lastRoamAnimation)
@@ -366,6 +377,11 @@ public partial class MainWindow : Window
             _petAnimator?.Play("jumping"); // in place; OnPetAnimationCompleted -> waving
         }
     }
+
+    private Rect GetSpriteBounds() => _spritePet is null
+        ? new Rect(0, 0, GetWindowWidth(), GetWindowHeight())
+        : PetGeometry.SpriteBounds(GetWindowWidth(), GetWindowHeight(), PetImage.Width, PetImage.Height,
+            _spritePet.Definition.FrameWidth, _spritePet.Definition.FrameHeight);
 
     private double GetWindowWidth()
     {
@@ -656,14 +672,7 @@ public partial class MainWindow : Window
             return TimeSpan.Zero;
         }
 
-        int remaining = a.FrameCount - 1 - a.FrameIndex;
-        if (remaining <= 0)
-        {
-            // Already at the last frame — give it one frame to land cleanly.
-            remaining = 1;
-        }
-
-        return TimeSpan.FromSeconds(remaining / (double)a.CurrentFps);
+        return TimeSpan.FromSeconds(a.RemainingTicksInPass / (double)a.CurrentFps);
     }
 
     private void CancelHoverExit()
@@ -704,7 +713,8 @@ public partial class MainWindow : Window
         var state = _spritePet?.Definition.GetState("jumping");
         if (state is not null && state.Fps > 0 && state.Frames > 0)
         {
-            return TimeSpan.FromSeconds(state.Frames / (double)state.Fps);
+            int ticks = state.PlayMode == PlayMode.PingPong ? 2 * state.Frames - 1 : state.Frames;
+            return TimeSpan.FromSeconds(ticks / (double)state.Fps);
         }
 
         return TimeSpan.FromMilliseconds(800);
@@ -814,7 +824,8 @@ public partial class MainWindow : Window
 
         // A paused, single-frame, looping, or interrupted animation may never
         // raise Completed. Always bound the wait for shutdown.
-        double seconds = exitState.Frames / (double)Math.Max(1, exitState.Fps);
+        int exitTicks = exitState.PlayMode == PlayMode.PingPong ? 2 * exitState.Frames - 1 : exitState.Frames;
+        double seconds = exitTicks / (double)Math.Max(1, exitState.Fps);
         _tuckAwayTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(seconds + 0.25, 0.25, 5));
         _tuckAwayTimer.Start();
         _petAnimator.Play("failed"); // OnPetAnimationCompleted -> Shutdown
@@ -845,7 +856,14 @@ public partial class MainWindow : Window
 
     /// <summary>Opens the Settings dialog on the pet's monitor. Used by the pet
     /// context menu and the tray menu.</summary>
-    public void OpenSettings()
+    private bool _openingSettings;
+    private bool _closed;
+    private SettingsWindow? _settingsWindow;
+    internal Action<SettingsWindow>? SettingsDialogPresenter { get; set; }
+
+    public async void OpenSettings() => await OpenSettingsAsync();
+
+    internal async Task OpenSettingsAsync()
     {
         if (!Dispatcher.CheckAccess())
         {
@@ -853,40 +871,62 @@ public partial class MainWindow : Window
             return;
         }
 
-        var settingsWindow = new SettingsWindow(
-            _settings,
-            _applyStartupSetting,
-            RefreshFromSettings,
-            _spritePet,
-            _originalStateFps,
-            _originalStatePlayMode,
-            _updateService,
-            PromptAndApplyUpdateAsync,
-            _petCatalog,
-            ReloadPetAsync,
-            _userPetsRoot,
-            _rediscoverPets)
+        if (_closed || _tuckingAway) return;
+        if (_settingsWindow is not null) { _settingsWindow.Activate(); return; }
+        if (_openingSettings) return;
+        _openingSettings = true;
+        try
         {
-            Owner = this
-        };
+            if (_rediscoverPets is not null)
+            {
+                try { _petCatalog = await _rediscoverPets(); }
+                catch (Exception exception) { MessageBox.Show(this, exception.Message, "Could not refresh pets"); return; }
+            }
+            if (_closed || _tuckingAway) return;
+            var settingsWindow = new SettingsWindow(
+                _settings,
+                _applyStartupSetting,
+                RefreshFromSettings,
+                _spritePet,
+                _originalStateFps,
+                _originalStatePlayMode,
+                _updateService,
+                PromptAndApplyUpdateAsync,
+                _petCatalog,
+                _userPetsRoot,
+                _rediscoverPets, canManageStartup: _canManageStartup,
+                preparePet: PreparePetReloadAsync, canCommitPet: CanCommitPreparedPet, commitPet: CommitPreparedPet)
+            {
+                Owner = this
+            };
 
-        settingsWindow.WindowStartupLocation = WindowStartupLocation.Manual;
+            settingsWindow.WindowStartupLocation = WindowStartupLocation.Manual;
 
-        DpiScale dpi = VisualTreeHelper.GetDpi(this);
-        WorkArea? monitor = MonitorWorkArea.ForPoint(
-            Left + GetWindowWidth() / 2, Top + GetWindowHeight() / 2,
-            dpi.DpiScaleX, dpi.DpiScaleY);
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            WorkArea? monitor = MonitorWorkArea.ForPoint(
+                Left + GetWindowWidth() / 2, Top + GetWindowHeight() / 2,
+                dpi.DpiScaleX, dpi.DpiScaleY);
 
-        Rect primary = SystemParameters.WorkArea;
-        WorkArea wa = monitor ?? new WorkArea(primary.Left, primary.Top, primary.Right, primary.Bottom);
+            Rect primary = SystemParameters.WorkArea;
+            WorkArea wa = monitor ?? new WorkArea(primary.Left, primary.Top, primary.Right, primary.Bottom);
 
-        Placement placement = SettingsPlacement.Compute(
-            Left, Top, GetWindowWidth(), GetWindowHeight(),
-            settingsWindow.Width, settingsWindow.Height,
-            wa.Left, wa.Top, wa.Right, wa.Bottom);
-        settingsWindow.Left = placement.Left;
-        settingsWindow.Top = placement.Top;
-        settingsWindow.ShowDialog();
+            settingsWindow.MaxHeight = Math.Max(1, wa.Bottom - wa.Top);
+            settingsWindow.MaxWidth = Math.Max(1, wa.Right - wa.Left);
+            settingsWindow.MinHeight = Math.Min(settingsWindow.MinHeight, settingsWindow.MaxHeight);
+            settingsWindow.MinWidth = Math.Min(settingsWindow.MinWidth, settingsWindow.MaxWidth);
+            settingsWindow.Height = Math.Min(settingsWindow.Height, settingsWindow.MaxHeight);
+            settingsWindow.Width = Math.Min(settingsWindow.Width, settingsWindow.MaxWidth);
+            Placement placement = SettingsPlacement.Compute(
+                Left, Top, GetWindowWidth(), GetWindowHeight(),
+                settingsWindow.Width, settingsWindow.Height,
+                wa.Left, wa.Top, wa.Right, wa.Bottom);
+            settingsWindow.Left = placement.Left;
+            settingsWindow.Top = placement.Top;
+            _settingsWindow = settingsWindow;
+            if (SettingsDialogPresenter is not null) SettingsDialogPresenter(settingsWindow);
+            else settingsWindow.ShowDialog();
+        }
+        finally { _openingSettings = false; _settingsWindow = null; }
     }
 
     private void RefreshFromSettings()
@@ -916,42 +956,61 @@ public partial class MainWindow : Window
     /// current pet on any failure. Called from the Settings dialog when the
     /// user changes the pet selection.
     /// </summary>
-    public async Task ReloadPetAsync(string petId)
+    private int _petReloadGeneration;
+    public async Task<PetReloadResult> ReloadPetAsync(string petId, CancellationToken cancellationToken = default)
     {
-        if (_petLoader is null)
-        {
-            return;
-        }
-
         try
         {
-            SpritePet? pet = await _petLoader(petId);
-            if (pet is null || _tuckingAway)
-            {
-                return; // keep current pet
-            }
-
-            _originalStateFps = PetOverrides.SnapshotFps(pet);
-            _originalStatePlayMode = PetOverrides.SnapshotPlayMode(pet);
-            PetOverrides.Apply(pet, _settings);
-
-            StopBehaviorTimers();
-            _petAnimator?.Stop();
-
-            _spritePet = pet;
-            _petAnimator = new PetAnimator(pet, PetImage);
-            _petAnimator.Completed += OnPetAnimationCompleted;
-            PetImage.Visibility = Visibility.Visible;
-
-            ApplyPetSize();
-            _roamController = null;          // rebuild against the new pet on next perch
-            _lastRoamAnimation = string.Empty;
-            StartBehaviorMode();
+            var prepared = await PreparePetReloadAsync(petId, cancellationToken);
+            if (prepared is null || !CanCommitPreparedPet(prepared, cancellationToken))
+                return new(null, null, null, "Pet load failed or was superseded.");
+            CommitPreparedPet(prepared);
+            return new(prepared.Pet, prepared.OriginalFps, prepared.OriginalModes, null);
         }
-        catch (Exception)
+        catch (Exception exception) { return new(null, null, null, exception.Message); }
+    }
+
+    internal async Task<PreparedPetReload?> PreparePetReloadAsync(string petId, CancellationToken cancellationToken)
+    {
+        int generation = ++_petReloadGeneration;
+        if (_petLoader is null || _closed || _tuckingAway || cancellationToken.IsCancellationRequested) return null;
+        var pet = await _petLoader(petId);
+        if (pet is null || !string.Equals(pet.Definition.Id, petId, StringComparison.OrdinalIgnoreCase) ||
+            _closed || _tuckingAway || cancellationToken.IsCancellationRequested || generation != _petReloadGeneration) return null;
+        if (pet.Definition.States.Count == 0 || pet.Frames.Count == 0 || pet.Frames.Any(pair => pair.Value.Count == 0))
+            throw new InvalidOperationException("Pet has no playable frames.");
+        return new(pet, PetOverrides.SnapshotFps(pet), PetOverrides.SnapshotPlayMode(pet), generation);
+    }
+
+    internal bool CanCommitPreparedPet(PreparedPetReload prepared, CancellationToken cancellationToken) =>
+        !_closed && !_tuckingAway && !cancellationToken.IsCancellationRequested && prepared.Generation == _petReloadGeneration;
+
+    internal void CommitPreparedPet(PreparedPetReload prepared)
+    {
+        if (!CanCommitPreparedPet(prepared, CancellationToken.None)) throw new InvalidOperationException("Pet load was superseded.");
+        var previous = _spritePet;
+        var previousFps = _originalStateFps; var previousModes = _originalStatePlayMode;
+        try { SwapPet(prepared.Pet, prepared.OriginalFps, prepared.OriginalModes); }
+        catch
         {
-            // Keep the current pet on failure.
+            if (previous is not null) SwapPet(previous, previousFps, previousModes);
+            throw;
         }
+    }
+
+    private void SwapPet(SpritePet pet, IReadOnlyDictionary<string, int>? originalFps, IReadOnlyDictionary<string, PlayMode>? originalModes)
+    {
+        PetOverrides.Apply(pet, _settings);
+        var animator = new PetAnimator(pet, PetImage);
+        StopBehaviorTimers(); StopInteractionTimers();
+        _summoned = false; _summonWalking = false;
+        _petAnimator?.Stop();
+        _originalStateFps = originalFps; _originalStatePlayMode = originalModes;
+        _spritePet = pet; _petAnimator = animator;
+        animator.Completed += OnPetAnimationCompleted;
+        PetImage.Visibility = Visibility.Visible;
+        ApplyPetSize(); _roamController = null; _lastRoamAnimation = string.Empty;
+        if (_alertActive) animator.Play("waving"); else StartBehaviorMode();
     }
 
     /// <summary>
@@ -1113,7 +1172,7 @@ public partial class MainWindow : Window
     private async Task MaybeAutoCheckForUpdateAsync()
     {
         // Decision: auto-update default OFF; when ON, check once at launch.
-        // Startup failures are silent (logged) — only manual checks show errors.
+        // Startup failures are silent — only manual checks show errors.
         if (!_settings.AutoUpdate || _updateService is null || !_updateService.IsSupported)
         {
             return;

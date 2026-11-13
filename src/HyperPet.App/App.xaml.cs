@@ -26,10 +26,16 @@ public partial class App : Application
     private readonly StartupService _startupService = new();
     private SettingsStore? _settingsStore;
     private HyperPetSettings? _settings;
+    private bool _canPersistSettings;
+    private bool _canApplyStartup;
     private MainWindow? _mainWindow;
     private TrayIcon? _trayIcon;
     private DispatcherTimer? _monitorTimer;
     private bool _monitorIterationRunning;
+    private Func<Task>? _enableWindowsMonitoring;
+    private MonitoringLifecycle? _windowsLifecycle;
+    private int _inAppDeliveryGeneration;
+    private SetupWindow? _setupWindow;
     private INotificationListener? _notificationListener;
     private InAppNotificationWatcher? _inAppWatcher;
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
@@ -38,11 +44,11 @@ public partial class App : Application
     private string _builtinPetsRoot = string.Empty;
     private string _userPetsRoot = string.Empty;
 
-    protected override async void OnStartup(StartupEventArgs e)
+    private AppLaunchContext _launchContext = null!;
+
+    [STAThread]
+    public static void Main()
     {
-        // MUST be the first thing the process does — wires Velopack's
-        // install / uninstall / first-run / restart hooks. Late placement
-        // breaks the update lifecycle.
         VelopackApp.Build()
             .OnBeforeUninstallFastCallback(_ =>
             {
@@ -50,7 +56,7 @@ public partial class App : Application
                 // uninstall leaves nothing behind. Best-effort; the uninstaller
                 // exits the process right after this hook.
                 UninstallCleanup.Run(
-                    () => _startupService.SetEnabled(false, string.Empty),
+                    () => new StartupService().SetEnabled(false, string.Empty),
                     () =>
                     {
                         string dataDir = Path.Combine(
@@ -64,11 +70,31 @@ public partial class App : Application
             })
             .Run();
 
+#if DEBUG
+        const bool development = true;
+#else
+        const bool development = false;
+#endif
+        var context = AppLaunchContext.Resolve(development, new UpdateService().IsSupported,
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        using var instance = new SingleInstanceCoordinator(context.ProfileKey);
+        if (!instance.TryAcquire()) { instance.RequestActivationAsync().GetAwaiter().GetResult(); return; }
+        var app = new App { _launchContext = context };
+        app.InitializeComponent();
+        instance.StartActivationListener(() =>
+        {
+            if (!app.Dispatcher.HasShutdownStarted)
+                app.Dispatcher.BeginInvoke(new Action(() => app._mainWindow?.Summon()));
+        });
+        app.Run();
+    }
+
+    protected override async void OnStartup(StartupEventArgs e)
+    {
         base.OnStartup(e);
 
-        string settingsDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "HyperPet");
+        string settingsDirectory = _launchContext.DataDirectory;
 
         _logger = new HyperPetLogger(settingsDirectory);
         WireUnhandledExceptionHandlers(_logger);
@@ -79,7 +105,11 @@ public partial class App : Application
         try
         {
             _settingsStore = new SettingsStore(settingsDirectory);
-            _settings = await _settingsStore.LoadAsync();
+            var loaded = await _settingsStore.LoadSessionAsync();
+            _settings = loaded.Settings;
+            _canPersistSettings = loaded.CanPersist;
+            _canApplyStartup = loaded.CanApplyStartup;
+            if (loaded.Warning is not null) settingsLoadException = new IOException(loaded.Warning);
         }
         catch (Exception exception)
         {
@@ -91,7 +121,7 @@ public partial class App : Application
         var petController = new PetController();
         try
         {
-            ApplyStartupSetting(_settings.StartWithWindows);
+            if (_canApplyStartup && _launchContext.CanManageStartup) ApplyStartupSetting(_settings.StartWithWindows);
         }
         catch (Exception exception)
         {
@@ -99,16 +129,23 @@ public partial class App : Application
         }
 
         var notificationDedupe = new NotificationDedupe();
-        var notificationListener = new WindowsNotificationListener(_logger);
-        _notificationListener = notificationListener;
-        var appLauncher = new AppLauncher();
+        _windowsLifecycle = new MonitoringLifecycle(() => new WindowsNotificationListener(_logger),
+            action => Dispatcher.InvokeAsync(action), exception => _logger.Warn("Windows notification operation unavailable", exception));
+        _windowsLifecycle.SetEnabled(_settings.ReactToWindowsNotifications);
+        _notificationListener = _windowsLifecycle;
+        var notificationListener = _windowsLifecycle;
         var debugSimulator = new DebugNotificationSimulator(_logger);
         _builtinPetsRoot = Path.Combine(AppContext.BaseDirectory, "Assets", "Pets");
         _userPetsRoot = Path.Combine(settingsDirectory, "Pets");
-        Directory.CreateDirectory(_userPetsRoot);
+        try { Directory.CreateDirectory(_userPetsRoot); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.Warn("User pets directory is unavailable; using readable pets only", exception);
+        }
         _petCatalog = await PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot);
         PetCatalogEntry? selectedEntry = PetCatalog.Resolve(_petCatalog, _settings.SelectedPet);
         SpritePet? spritePet = await TryLoadSpritePetAsync(_logger, selectedEntry);
+        if (spritePet is not null) _settings.SelectedPet = spritePet.Definition.Id;
 
         // Snapshot original per-state fps + play mode BEFORE applying any
         // user overrides so the Settings dialog's "Reset" / "Default" can
@@ -130,7 +167,6 @@ public partial class App : Application
             spritePet,
             originalStateFps,
             originalStatePlayMode,
-            appLauncher,
             SetPollInterval,
             PollSoon,
             debugSimulator,
@@ -139,7 +175,8 @@ public partial class App : Application
             _petCatalog,
             LoadPetByIdAsync,
             _userPetsRoot,
-            () => PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot));
+            () => PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot),
+            canManageStartup: _canApplyStartup && _launchContext.CanManageStartup);
         _mainWindow.Show();
 
         _trayIcon = new TrayIcon(
@@ -154,37 +191,38 @@ public partial class App : Application
         {
             MessageBox.Show(
                 _mainWindow,
-                "HyperPet could not load your saved settings, so default settings were used for this session.",
+                "Saved settings could not be loaded. Defaults are used temporarily; this session will not overwrite your saved settings or Windows startup preference.",
                 "HyperPet Settings",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
 
-        NotificationAccessStatus accessStatus = await TryRequestNotificationAccessAsync(notificationListener);
-
-        if (accessStatus != NotificationAccessStatus.Allowed)
+        StartInAppWatcher(notificationDedupe, petController, _settings);
+        _enableWindowsMonitoring = async () =>
         {
-            var setupWindow = new SetupWindow(async () =>
+            if (_shutdownCts.IsCancellationRequested || !_settings.ReactToWindowsNotifications) return;
+            if (_setupWindow is { IsLoaded: true }) { _setupWindow.Activate(); return; }
+            int generation = notificationListener.Generation;
+            var accessStatus = await TryRequestNotificationAccessAsync(notificationListener);
+            if (_shutdownCts.IsCancellationRequested || !notificationListener.CanDeliver(generation)) return;
+            if (accessStatus == NotificationAccessStatus.Allowed)
             {
-                NotificationAccessStatus setupAccessStatus =
-                    await TryRequestNotificationAccessAsync(notificationListener);
-
-                if (setupAccessStatus == NotificationAccessStatus.Allowed)
-                {
+                StartMonitoring(notificationListener, notificationDedupe, petController, _settings);
+                return;
+            }
+            if (_setupWindow is { IsLoaded: true }) { _setupWindow.Activate(); return; }
+            _setupWindow = new SetupWindow(async () =>
+            {
+                int requestGeneration = notificationListener.Generation;
+                var status = await TryRequestNotificationAccessAsync(notificationListener);
+                if (!_shutdownCts.IsCancellationRequested && notificationListener.CanDeliver(requestGeneration) && status == NotificationAccessStatus.Allowed)
                     StartMonitoring(notificationListener, notificationDedupe, petController, _settings);
-                }
-
-                return setupAccessStatus;
-            })
-            {
-                Owner = _mainWindow
-            };
-
-            setupWindow.Show();
-            return;
-        }
-
-        StartMonitoring(notificationListener, notificationDedupe, petController, _settings);
+                return status;
+            }) { Owner = _mainWindow };
+            _setupWindow.Closed += (_, _) => _setupWindow = null;
+            _setupWindow.SetInitialStatus(accessStatus); _setupWindow.Show();
+        };
+        if (_settings.ReactToWindowsNotifications) await _enableWindowsMonitoring();
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -193,10 +231,11 @@ public partial class App : Application
         _trayIcon?.Dispose();
         _monitorTimer?.Stop();
         _inAppWatcher?.Dispose();
-        _notificationListener?.StopListening();
+        _windowsLifecycle?.Dispose();
+        Interlocked.Increment(ref _inAppDeliveryGeneration);
         _shutdownCts.Cancel();
 
-        if (_settingsStore is not null && _settings is not null && _mainWindow is not null)
+        if (_canPersistSettings && _settingsStore is not null && _settings is not null && _mainWindow is not null)
         {
             _settings.PetLeft = _mainWindow.Left;
             _settings.PetTop = _mainWindow.Top;
@@ -238,14 +277,8 @@ public partial class App : Application
                 exception);
         };
 
-        AppDomain.CurrentDomain.FirstChanceException += (_, args) =>
-        {
-            // Logs every thrown exception, even if caught downstream. Useful
-            // when process dies without any hook firing — at least we see the
-            // last exception before silence.
-            logger.Warn(
-                $"FirstChanceException: {args.Exception.GetType().FullName}: {args.Exception.Message}");
-        };
+        // Do not log FirstChanceException globally: I/O failures in the logger
+        // itself raise it before catch handlers run and can recurse indefinitely.
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
@@ -302,7 +335,7 @@ public partial class App : Application
 
             foreach (HyperNotification notification in notifications)
             {
-                if (_shutdownCts.IsCancellationRequested)
+                if (_shutdownCts.IsCancellationRequested || !settings.ReactToWindowsNotifications)
                 {
                     break;
                 }
@@ -383,29 +416,19 @@ public partial class App : Application
         PetController petController,
         HyperPetSettings settings)
     {
-        if (_monitorTimer is not null || _shutdownCts.IsCancellationRequested)
+        if (_shutdownCts.IsCancellationRequested) return;
+        if (_monitorTimer is not null)
         {
-            return;
+            notificationListener.StartListening(); _monitorTimer.Start(); return;
         }
 
         // Event-based: NotificationChanged fires when a notification is added.
         // Marshal to the UI/STA thread before processing.
         notificationListener.NotificationAdded += (_, notification) =>
         {
-            if (!settings.ReactToWindowsNotifications)
-            {
-                return;
-            }
-
-            try
-            {
-                Dispatcher.InvokeAsync(() =>
-                    DispatchIfNew(notification, notificationDedupe, petController, settings));
-            }
-            catch (Exception exception)
-            {
-                _logger?.Error("NotificationAdded dispatch failed", exception);
-            }
+            // MonitoringLifecycle posts to this dispatcher and rejects old enable generations.
+            if (!_shutdownCts.IsCancellationRequested && settings.ReactToWindowsNotifications)
+                DispatchIfNew(notification, notificationDedupe, petController, settings);
         };
         notificationListener.StartListening();
 
@@ -447,12 +470,11 @@ public partial class App : Application
             return;
         }
 
-        // Always include the current process so the debug press-9 simulator
-        // (which spawns an in-process popup) round-trips through the same
-        // pipeline that catches real third-party popups like Zalo.
+        // Watch the in-process simulator only in debug mode; production scans
+        // should not subscribe to HyperPet's own accessibility tree.
         string ownProcessName = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
         var watchList = (settings.WatchedInAppProcesses ?? new List<string>())
-            .Concat(new[] { ownProcessName })
+            .Concat(settings.DebugMode ? new[] { ownProcessName } : Array.Empty<string>())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -484,6 +506,7 @@ public partial class App : Application
 
         _inAppWatcher.Detected += (_, notification) =>
         {
+            int generation = Volatile.Read(ref _inAppDeliveryGeneration);
             if (!settings.ReactToInAppNotifications)
             {
                 return;
@@ -491,20 +514,26 @@ public partial class App : Application
 
             try
             {
-                DispatchIfNew(notification, notificationDedupe, petController, settings);
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (!_shutdownCts.IsCancellationRequested && settings.ReactToInAppNotifications && generation == Volatile.Read(ref _inAppDeliveryGeneration))
+                        DispatchIfNew(notification, notificationDedupe, petController, settings);
+                });
             }
             catch (Exception exception)
             {
                 _logger?.Error("In-app watcher dispatch failed", exception);
             }
         };
-        _inAppWatcher.Start();
+        if (settings.ReactToInAppNotifications) _inAppWatcher.Start();
     }
 
     private async Task<SpritePet?> LoadPetByIdAsync(string petId)
     {
         var catalog = await PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot);
-        return await TryLoadSpritePetAsync(_logger!, PetCatalog.Resolve(catalog, petId));
+        // Explicit switching/removal fallback must never load an unrelated pet.
+        var entry = catalog.FirstOrDefault(item => string.Equals(item.Id, petId, StringComparison.OrdinalIgnoreCase));
+        return await TryLoadSpritePetAsync(_logger!, entry);
     }
 
     private static async Task<SpritePet?> TryLoadSpritePetAsync(HyperPetLogger logger, PetCatalogEntry? entry)
@@ -529,6 +558,11 @@ public partial class App : Application
 
     private void ApplyStartupSetting(bool enabled)
     {
+        if (!_canApplyStartup || !_launchContext.CanManageStartup)
+        {
+            if (enabled) throw new InvalidOperationException("Windows startup is managed only by the installed HyperPet app.");
+            return;
+        }
         string? executablePath = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(executablePath))
         {
@@ -552,8 +586,22 @@ public partial class App : Application
         SetPollInterval(winInterval);
         _mainWindow?.ConfigureDebugPolling(winInterval);
 
+        _windowsLifecycle?.SetEnabled(_settings.ReactToWindowsNotifications);
+        Interlocked.Increment(ref _inAppDeliveryGeneration);
         var inAppInterval = TimeSpan.FromSeconds(Math.Max(1, _settings.InAppNotificationPollIntervalSeconds));
-        _inAppWatcher?.SetInterval(inAppInterval);
+        if (_inAppWatcher is not null)
+        {
+            _inAppWatcher.Stop();
+            _inAppWatcher.SetInterval(inAppInterval);
+            _inAppWatcher.SetWatchList((_settings.WatchedInAppProcesses ?? new())
+                .Concat(_settings.DebugMode ? new[] { System.Diagnostics.Process.GetCurrentProcess().ProcessName } : Array.Empty<string>()));
+            if (_settings.ReactToInAppNotifications) _inAppWatcher.Start();
+        }
+        if (_settings.ReactToWindowsNotifications)
+        {
+            _ = _enableWindowsMonitoring?.Invoke();
+        }
+        else { _monitorTimer?.Stop(); _notificationListener?.StopListening(); _setupWindow?.Close(); }
 
         _logger?.Info($"Applied monitoring intervals: win={winInterval.TotalSeconds}s inApp={inAppInterval.TotalSeconds}s");
     }
@@ -587,7 +635,7 @@ public partial class App : Application
 
     private void SaveSettings()
     {
-        if (_settingsStore is null || _settings is null)
+        if (!_canPersistSettings || _settingsStore is null || _settings is null)
         {
             return;
         }

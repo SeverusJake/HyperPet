@@ -1,3 +1,5 @@
+> Historical engineering record. Read docs/README.md for current guidance; do not re-execute this plan against HEAD.
+
 # Monitor selection and notification inbox implementation plan
 
 **Goal:** Let the user select a pet monitor, recover from display disconnection,

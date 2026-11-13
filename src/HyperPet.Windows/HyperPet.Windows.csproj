@@ -1,17 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWPF>false</UseWPF>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="HyperPet.App.Tests" />
     <ProjectReference Include="..\HyperPet.Core\HyperPet.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.WinUI.Notifications" Version="7.1.2" />
-    <!-- Override the toolkit's vulnerable System.Drawing.Common 4.7.0 dependency. -->
-    <PackageReference Include="System.Drawing.Common" Version="8.0.34" />
+    <!-- Keep the toolkit's drawing dependency on the serviced .NET 10 version. -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.15" />
   </ItemGroup>
 </Project>

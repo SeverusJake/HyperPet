@@ -21,7 +21,7 @@ public static class PetOverrides
     {
         string id = pet.Definition.Id;
 
-        if (settings.StateSpeedOverrides.TryGetValue(id, out var fpsMap))
+        if (settings.StateSpeedOverrides.TryGetValue(id, out var fpsMap) && fpsMap is not null)
         {
             foreach (var (state, fps) in fpsMap)
             {
@@ -32,7 +32,7 @@ public static class PetOverrides
             }
         }
 
-        if (settings.StatePlayModeOverrides.TryGetValue(id, out var modeMap))
+        if (settings.StatePlayModeOverrides.TryGetValue(id, out var modeMap) && modeMap is not null)
         {
             foreach (var (state, mode) in modeMap)
             {

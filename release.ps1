@@ -1,98 +1,58 @@
-# release.ps1 — full HyperPet release pipeline.
-#
-# Bumps the version, publishes, packs (Setup + nupkgs + portable via pack.ps1),
-# commits + tags + pushes, then creates the GitHub release with EVERY asset
-# (versioned Setup.exe and portable zip, full + delta nupkg, releases.win.json).
-#
-# Usage:
-#   ./release.ps1 -Version 0.7.0
-#   ./release.ps1 -Version 0.7.0 -NotesFile Releases/notes-0.7.0.md
-#   ./release.ps1 -Version 0.7.0 -SkipGit      # build + pack + release, no commit/tag
-#   ./release.ps1 -Version 0.7.0 -DryRun       # build + pack only, no git, no gh
-
+# Build from a clean, versioned commit. Remote publication is explicit.
 param(
-    [Parameter(Mandatory = $true)][string]$Version,
+    [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
     [string]$NotesFile,
-    [switch]$SkipGit,
-    [switch]$DryRun
+    [Alias('DryRun')][switch]$BuildOnly,
+    [switch]$Publish
 )
-
 $ErrorActionPreference = 'Stop'
-Set-Location $PSScriptRoot
-
-if ($Version -notmatch '^\d+\.\d+\.\d+$') {
-    throw "Version must be X.Y.Z (got '$Version')."
-}
-
-$csproj   = 'src/HyperPet.App/HyperPet.App.csproj'
-$publishD = "publish/velopack/$Version"
-$tag      = "v$Version"
-
-Write-Host "=== Releasing HyperPet $Version ===" -ForegroundColor Cyan
-
-# --- 1. Bump version in the csproj (all four fields) ---
-$xml = Get-Content $csproj -Raw
-$xml = $xml -replace '<Version>[\d.]+</Version>', "<Version>$Version</Version>"
-$xml = $xml -replace '<AssemblyVersion>[\d.]+</AssemblyVersion>', "<AssemblyVersion>$Version.0</AssemblyVersion>"
-$xml = $xml -replace '<FileVersion>[\d.]+</FileVersion>', "<FileVersion>$Version.0</FileVersion>"
-$xml = $xml -replace '<InformationalVersion>[\d.]+</InformationalVersion>', "<InformationalVersion>$Version</InformationalVersion>"
-Set-Content $csproj -Value $xml -Encoding utf8
-Write-Host "Bumped $csproj to $Version." -ForegroundColor Green
-
-# --- 2. Publish (self-contained win-x64, plain folder) ---
-dotnet publish $csproj -c Release -r win-x64 --self-contained true -o $publishD -nologo
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed." }
-
-# --- 3. Pack (Setup + nupkgs + portable, with Setup icon) ---
-& "$PSScriptRoot/pack.ps1" -Version $Version
-
-# --- 4. Use the versioned distribution files produced by pack.ps1 ---
-$setupDst = "Releases/HyperPet-v$Version-win-Setup.exe"
-$portableDst = "Releases/HyperPet-v$Version-win-Portable.zip"
-
-# --- 5. Collect the release assets (delta only exists when a prior version did) ---
-$assets = @(
-    $setupDst,
-    "Releases/HyperPet-$Version-full.nupkg",
-    'Releases/releases.win.json',
-    $portableDst
-)
-$delta = "Releases/HyperPet-$Version-delta.nupkg"
-if (Test-Path $delta) { $assets += $delta }
-
-foreach ($a in $assets) {
-    if (-not (Test-Path $a)) { throw "Missing release asset: $a" }
-}
-Write-Host "Assets:" -ForegroundColor Cyan
-$assets | ForEach-Object { Write-Host "  $_" }
-
-if ($DryRun) {
-    Write-Host "DryRun: stopping before git + gh." -ForegroundColor Yellow
-    return
-}
-
-# --- 6. Commit version bump + tag + push ---
-if (-not $SkipGit) {
-    git add $csproj
-    git commit -m "release: HyperPet $Version"
-    if ($LASTEXITCODE -ne 0) { throw "git commit failed." }
-    git push origin main
-    if ($LASTEXITCODE -ne 0) { throw "git push failed." }
-    git tag -a $tag -m "HyperPet $Version"
-    git push origin $tag
-    if ($LASTEXITCODE -ne 0) { throw "git push tag failed." }
-}
-
-# --- 7. Create the GitHub release with ALL assets ---
-$notesArgs = @()
-if ($NotesFile -and (Test-Path $NotesFile)) {
-    $notesArgs = @('--notes-file', $NotesFile)
-} else {
-    $notesArgs = @('--generate-notes')
-}
-
-gh release create $tag @assets --title "HyperPet $Version" @notesArgs
-if ($LASTEXITCODE -ne 0) { throw "gh release create failed." }
-
-Write-Host "=== Released HyperPet $Version ===" -ForegroundColor Green
-gh release view $tag --json assets --jq '.assets[].name'
+if ($BuildOnly -and $Publish) { throw 'Choose BuildOnly or Publish, not both.' }
+Import-Module (Join-Path $PSScriptRoot 'scripts/ReleaseTools.psm1') -Force
+Push-Location $PSScriptRoot
+try {
+    $commit = Assert-CleanReleaseSource -Repository $PSScriptRoot
+    $project = Join-Path $PSScriptRoot 'src/HyperPet.App/HyperPet.App.csproj'
+    [xml]$xml = Get-Content -LiteralPath $project -Raw
+    if ($xml.Project.PropertyGroup.Version -ne $Version) { throw 'Version must already match the committed project version. This script never edits source.' }
+    $tag = "v$Version"
+    if ($Publish) {
+        $tagCommit = & git rev-parse "$tag^{}"
+        if ($LASTEXITCODE -ne 0 -or $tagCommit.Trim() -ne $commit) { throw 'The existing tag must identify the exact release commit.' }
+        $remote = @(& git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}")
+        if ($LASTEXITCODE -ne 0 -or -not ($remote | Where-Object { ($_ -split '\s+')[0] -eq $commit })) { throw 'Remote release tag does not identify this commit.' }
+    }
+    Invoke-ReleaseCommand -Command dotnet -Arguments @('test', 'HyperPet.sln', '-c', 'Release')
+    $auditText = (& dotnet list HyperPet.sln package --vulnerable --include-transitive --format json) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw 'Dependency audit failed.' }
+    $audit = $auditText | ConvertFrom-Json
+    foreach ($framework in $audit.projects.frameworks) {
+        foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
+            if ($package.vulnerabilities.Count -gt 0) { throw "Dependency advisory: $($package.id)" }
+        }
+    }
+    Invoke-ReleaseCommand -Command dotnet -Arguments @('tool', 'restore')
+    $output = Join-Path $PSScriptRoot ("publish/verified/$Version-$($commit.Substring(0,12))-" + [guid]::NewGuid().ToString('N'))
+    $appDirectory = Join-Path $output 'app'
+    $releaseDirectory = Join-Path $output 'releases'
+    Invoke-ReleaseCommand -Command dotnet -Arguments @('publish', $project, '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true', '-o', $appDirectory, "-p:SourceRevisionId=$commit")
+    & (Join-Path $PSScriptRoot 'pack.ps1') -Version $Version -PackDirectory $appDirectory -OutputDirectory $releaseDirectory
+    $assets = @(
+        (Join-Path $releaseDirectory "HyperPet-v$Version-win-Setup.exe"),
+        (Join-Path $releaseDirectory "HyperPet-v$Version-win-Portable.zip"),
+        (Join-Path $releaseDirectory 'releases.win.json')
+    ) + @(Get-ChildItem -LiteralPath $releaseDirectory -Filter "HyperPet-$Version-*.nupkg" | ForEach-Object FullName)
+    Write-ReleaseManifest -Directory $releaseDirectory -Version $Version -CommitSha $commit -Artifacts $assets
+    if ($Publish) {
+        if ((Assert-CleanReleaseSource -Repository $PSScriptRoot) -ne $commit) { throw 'Source changed while building.' }
+        $assets += Join-Path $releaseDirectory 'build-manifest.json'
+        $assets += Join-Path $releaseDirectory 'SHA256SUMS.txt'
+        $notes = @('--generate-notes')
+        if ($NotesFile) {
+            if (-not (Test-Path -LiteralPath $NotesFile -PathType Leaf)) { throw 'Notes file does not exist.' }
+            $notes = @('--notes-file', (Resolve-Path -LiteralPath $NotesFile).Path)
+        }
+        Invoke-ReleaseCommand -Command gh -Arguments (@('release', 'create', $tag, '--verify-tag', '--title', "HyperPet $Version") + $assets + $notes)
+    }
+    Write-Host "Verified artifacts: $releaseDirectory"
+    if (-not $Publish) { Write-Host 'Build only: no commit, tag, push, or GitHub publication performed.' }
+} finally { Pop-Location }

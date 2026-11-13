@@ -1,3 +1,5 @@
+> Historical engineering record. Read docs/README.md for current guidance; do not re-execute this plan against HEAD.
+
 # Add / Remove Pet
 
 Date: 2026-05-29

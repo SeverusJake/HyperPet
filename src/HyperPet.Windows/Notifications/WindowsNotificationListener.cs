@@ -12,12 +12,11 @@ public sealed class WindowsNotificationListener : INotificationListener
     private readonly HyperPetLogger? logger;
     private TypedEventHandler<UserNotificationListener, UserNotificationChangedEventArgs>? changedHandler;
     private bool isListening;
+    private readonly NotificationCallbackGate callbackGate = new();
 
-    // Retains every WinRT UserNotification returned to us. Prevents the GC
-    // finalizer thread from releasing the underlying COM objects, which causes
-    // CFG violations (process crash) on unpackaged desktop apps due to a
-    // wpnapps.dll lifetime bug. Memory cost: ~1 ref per unique notification
-    // for the lifetime of the app session.
+    // Bounded legacy retention workaround for reported unpackaged WinRT lifetime
+    // crashes. Its efficacy is unverified; trimming can release old wrappers.
+    // Preserve behavior until a deployment/GC stress test provides evidence.
     private readonly List<UserNotification> retainedNotifications = new();
     private const int MaxRetained = 256;
 
@@ -57,7 +56,8 @@ public sealed class WindowsNotificationListener : INotificationListener
 
         try
         {
-            changedHandler = OnNotificationChanged;
+            int generation = callbackGate.Start();
+            changedHandler = (sender, args) => OnNotificationChanged(sender, args, generation);
             listener.NotificationChanged += changedHandler;
             isListening = true;
             logger?.Info("NotificationChanged event subscribed");
@@ -67,6 +67,7 @@ public sealed class WindowsNotificationListener : INotificationListener
             // NotificationChanged event may require package identity (MSIX). If
             // subscription fails on unpackaged desktop, fall back to polling only.
             logger?.Warn("Could not subscribe to NotificationChanged event", exception);
+            callbackGate.Stop();
             changedHandler = null;
             isListening = false;
         }
@@ -74,6 +75,7 @@ public sealed class WindowsNotificationListener : INotificationListener
 
     public void StopListening()
     {
+        callbackGate.Stop();
         if (!isListening || changedHandler is null)
         {
             return;
@@ -94,7 +96,7 @@ public sealed class WindowsNotificationListener : INotificationListener
         }
     }
 
-    private void OnNotificationChanged(UserNotificationListener sender, UserNotificationChangedEventArgs args)
+    private void OnNotificationChanged(UserNotificationListener sender, UserNotificationChangedEventArgs args, int generation)
     {
         if (args.ChangeKind != UserNotificationChangedKind.Added)
         {
@@ -103,22 +105,21 @@ public sealed class WindowsNotificationListener : INotificationListener
 
         try
         {
-            UserNotification? notification = sender.GetNotification(args.UserNotificationId);
-            if (notification is null)
+            callbackGate.Deliver(generation, () =>
             {
-                return;
-            }
-
-            HyperNotification? hyper = TryConvert(notification);
-            if (hyper is not null)
-            {
-                lock (retainedNotifications)
+                UserNotification? notification = sender.GetNotification(args.UserNotificationId);
+                if (notification is null) return null;
+                HyperNotification? hyper = TryConvert(notification);
+                if (hyper is not null)
                 {
-                    retainedNotifications.Add(notification);
-                    TrimRetained();
+                    lock (retainedNotifications)
+                    {
+                        retainedNotifications.Add(notification);
+                        TrimRetained();
+                    }
                 }
-                NotificationAdded?.Invoke(this, hyper);
-            }
+                return hyper;
+            }, hyper => NotificationAdded?.Invoke(this, hyper));
         }
         catch (Exception exception)
         {
@@ -147,10 +148,8 @@ public sealed class WindowsNotificationListener : INotificationListener
             }
         }
 
-        // Retain the WinRT collection and every UserNotification so their COM
-        // refs are never released by the GC finalizer (which crashes due to
-        // the wpnapps.dll bug on unpackaged desktop). The cost is a small
-        // permanent memory hold for the app session.
+        // Keep a bounded set of wrappers; neither the collection nor all historical
+        // notifications are retained for the whole session.
         lock (retainedNotifications)
         {
             retainedNotifications.AddRange(notifications);
@@ -158,13 +157,6 @@ public sealed class WindowsNotificationListener : INotificationListener
         }
 
         return hyperNotifications;
-    }
-
-    public Task<bool> TryActivateAsync(HyperNotification notification, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        return Task.FromResult(false);
     }
 
     private void TrimRetained()
@@ -197,7 +189,9 @@ public sealed class WindowsNotificationListener : INotificationListener
                 ':',
                 appUserModelId,
                 notification.Id.ToString(),
-                notification.CreationTime.ToUnixTimeMilliseconds().ToString());
+                notification.CreationTime.ToUnixTimeMilliseconds().ToString(),
+                Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new[] { title, body })))));
 
             return new HyperNotification(
                 sourceId,

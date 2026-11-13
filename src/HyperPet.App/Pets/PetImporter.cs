@@ -6,149 +6,152 @@ namespace HyperPet.App.Pets;
 
 public sealed record PetImportResult(bool Success, string? Message, PetCatalogEntry? Entry);
 
-/// <summary>
-/// Validates and installs a pet from a folder or zip into the user-pets root.
-/// Never throws to callers — all failures are returned as a result with a
-/// user-facing message.
-/// </summary>
 public static class PetImporter
 {
-    /// <summary>
-    /// Installs the pet whose pet.json sits at the top of
-    /// <paramref name="sourceDirectory"/> into userPetsRoot/&lt;id&gt;.
-    /// </summary>
-    public static async Task<PetImportResult> ImportFromFolderAsync(
-        string sourceDirectory, string userPetsRoot, Func<string, bool> confirmOverwrite)
+    private const long MaxTotalBytes = 256L * 1024 * 1024;
+    private const long MaxFileBytes = 64L * 1024 * 1024;
+    private const int MaxFiles = 1024;
+    private const int MaxDepth = 8;
+
+    public static Task<PetImportResult> ImportFromFolderAsync(string sourceDirectory, string userPetsRoot,
+        Func<string, bool> confirmOverwrite, IReadOnlySet<string>? protectedIds = null,
+        CancellationToken cancellationToken = default)
+        => ImportFromFolderCoreAsync(sourceDirectory, userPetsRoot, confirmOverwrite, new PetImportFileOperations(), protectedIds, cancellationToken);
+
+    internal static async Task<PetImportResult> ImportFromFolderCoreAsync(string sourceDirectory, string userPetsRoot,
+        Func<string, bool> confirmOverwrite, PetImportFileOperations operations, IReadOnlySet<string>? protectedIds = null,
+        CancellationToken cancellationToken = default)
     {
+        string? staging = null;
+        string? backup = null;
         try
         {
-            if (string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory))
-            {
-                return new PetImportResult(false, "The selected folder does not exist.", null);
-            }
-
-            if (!File.Exists(Path.Combine(sourceDirectory, "pet.json")))
-            {
-                return new PetImportResult(false, "That folder has no pet.json at its top level.", null);
-            }
-
-            PetDefinition def;
-            try
-            {
-                def = await PetDefinitionLoader.LoadAsync(sourceDirectory).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                return new PetImportResult(false, $"pet.json is invalid: {ex.Message}", null);
-            }
-
-            if (string.IsNullOrWhiteSpace(def.Id))
-            {
-                return new PetImportResult(false, "pet.json has no id.", null);
-            }
-
-            string sheet = Path.Combine(sourceDirectory, def.SpritesheetPath);
-            if (!File.Exists(sheet))
-            {
-                return new PetImportResult(false, $"The spritesheet '{def.SpritesheetPath}' referenced by pet.json is missing.", null);
-            }
-
+            if (!Directory.Exists(sourceDirectory)) return new(false, "The selected folder does not exist.", null);
+            var definition = await PetDefinitionLoader.LoadAsync(sourceDirectory);
+            string target = PetPathPolicy.ResolveInstallTarget(userPetsRoot, definition.Id);
+            PetPathPolicy.ValidateSource(sourceDirectory, target);
+            if (protectedIds?.Contains(definition.Id) == true)
+                return new(false, "A built-in pet already uses this id. Choose a different pet id.", null);
+            if (!File.Exists(PetPathPolicy.ResolveContainedFile(sourceDirectory, definition.SpritesheetPath)))
+                return new(false, "The spritesheet referenced by pet.json is missing.", null);
             Directory.CreateDirectory(userPetsRoot);
-            string folderName = SanitizeFolderName(def.Id);
-            string target = Path.Combine(userPetsRoot, folderName);
-
+            // Siblings of the pets root stay on the same volume and cannot enter its catalog.
+            string parent = Path.GetDirectoryName(Path.GetFullPath(userPetsRoot))!;
+            staging = Path.Combine(parent, ".hyperpet-stage-" + Guid.NewGuid().ToString("N"));
+            await Task.Run(() => CopyBounded(sourceDirectory, staging, cancellationToken), cancellationToken);
+            await SpritePetLoader.LoadAsync(staging);
+            cancellationToken.ThrowIfCancellationRequested();
             if (Directory.Exists(target))
             {
-                if (!confirmOverwrite(def.Id))
-                {
-                    return new PetImportResult(false, "Import cancelled.", null);
-                }
-
-                Directory.Delete(target, recursive: true);
+                // This continuation retains the caller's UI context. All I/O above is separate.
+                if (!confirmOverwrite(definition.Id)) return new(false, "Import cancelled.", null);
+                PetPathPolicy.RejectReparseAncestors(target);
+                backup = Path.Combine(parent, ".hyperpet-backup-" + Guid.NewGuid().ToString("N"));
+                operations.MoveDirectory(target, backup);
             }
-
-            string staging = target + ".importing-" + Guid.NewGuid().ToString("N");
-            try
-            {
-                CopyDirectory(sourceDirectory, staging);
-                Directory.Move(staging, target);
-            }
+            try { operations.MoveDirectory(staging, target); staging = null; }
             catch
             {
-                if (Directory.Exists(staging)) Directory.Delete(staging, true);
+                if (backup is not null && !Directory.Exists(target))
+                {
+                    try { operations.MoveDirectory(backup, target); backup = null; }
+                    catch (Exception rollback) { throw new IOException($"Install failed. Original pet is preserved at '{backup}'. {rollback.Message}"); }
+                }
                 throw;
             }
-
-            return new PetImportResult(true, null, new PetCatalogEntry(def.Id, def.DisplayName, target));
-        }
-        catch (Exception ex)
-        {
-            return new PetImportResult(false, $"Could not import the pet: {ex.Message}", null);
-        }
-    }
-
-    /// <summary>
-    /// Extracts the zip to a temp directory, finds pet.json anywhere inside
-    /// (nested-tolerant), and installs from its containing folder.
-    /// </summary>
-    public static async Task<PetImportResult> ImportFromZipAsync(
-        string zipPath, string userPetsRoot, Func<string, bool> confirmOverwrite)
-    {
-        if (string.IsNullOrWhiteSpace(zipPath) || !File.Exists(zipPath))
-        {
-            return new PetImportResult(false, "The selected zip does not exist.", null);
-        }
-
-        string tempExtract = Path.Combine(Path.GetTempPath(), "HyperPet.import-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            Directory.CreateDirectory(tempExtract);
-            try
+            string? warning = null;
+            if (backup is not null)
             {
-                ZipFile.ExtractToDirectory(zipPath, tempExtract);
+                try { Directory.Delete(backup, true); backup = null; }
+                catch { warning = $"Pet installed. Previous copy is preserved at '{backup}'."; }
             }
-            catch (Exception ex)
-            {
-                return new PetImportResult(false, $"Could not read the zip: {ex.Message}", null);
-            }
-
-            string? petJson = Directory
-                .EnumerateFiles(tempExtract, "pet.json", SearchOption.AllDirectories)
-                .FirstOrDefault();
-
-            if (petJson is null)
-            {
-                return new PetImportResult(false, "The zip has no pet.json.", null);
-            }
-
-            string staging = Path.GetDirectoryName(petJson)!;
-            return await ImportFromFolderAsync(staging, userPetsRoot, confirmOverwrite).ConfigureAwait(false);
+            return new(true, warning, new(definition.Id, definition.DisplayName, target));
         }
+        catch (Exception exception) { return new(false, $"Could not import the pet: {exception.Message}", null); }
         finally
         {
-            try { if (Directory.Exists(tempExtract)) Directory.Delete(tempExtract, true); }
-            catch { /* best-effort temp cleanup */ }
+            // Never remove the backup here: a failed rollback must leave it recoverable.
+            try { if (staging is not null && Directory.Exists(staging)) Directory.Delete(staging, true); }
+            catch { }
         }
     }
 
-    private static string SanitizeFolderName(string id)
+    public static async Task<PetImportResult> ImportFromZipAsync(string zipPath, string userPetsRoot,
+        Func<string, bool> confirmOverwrite, IReadOnlySet<string>? protectedIds = null,
+        CancellationToken cancellationToken = default)
     {
-        char[] invalid = Path.GetInvalidFileNameChars();
-        var chars = id.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
-        string name = new string(chars).Trim();
-        return name.Length == 0 ? "pet" : name;
+        if (!File.Exists(zipPath)) return new(false, "The selected zip does not exist.", null);
+        string temporary = Path.Combine(Path.GetTempPath(), "HyperPet.import-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            await Task.Run(() => ExtractBounded(zipPath, temporary, cancellationToken), cancellationToken);
+            string[] metadata = Directory.GetFiles(temporary, "pet.json", SearchOption.AllDirectories);
+            if (metadata.Length != 1) return new(false, "The zip must contain exactly one pet.json.", null);
+            return await ImportFromFolderAsync(Path.GetDirectoryName(metadata[0])!, userPetsRoot, confirmOverwrite, protectedIds, cancellationToken);
+        }
+        catch (Exception exception) { return new(false, $"Could not read the zip: {exception.Message}", null); }
+        finally { try { if (Directory.Exists(temporary)) Directory.Delete(temporary, true); } catch { } }
     }
 
-    private static void CopyDirectory(string source, string dest)
+    private static void CopyBounded(string source, string destination, CancellationToken cancellationToken)
     {
-        Directory.CreateDirectory(dest);
-        foreach (string file in Directory.EnumerateFiles(source))
+        long total = 0; int count = 0;
+        void Copy(string from, string to, int depth)
         {
-            File.Copy(file, Path.Combine(dest, Path.GetFileName(file)), overwrite: true);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (depth > MaxDepth) throw new InvalidOperationException("Pet folder exceeds maximum depth (8).");
+            PetPathPolicy.RejectReparseAncestors(from);
+            Directory.CreateDirectory(to);
+            foreach (string file in Directory.EnumerateFiles(from))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                PetPathPolicy.RejectReparseAncestors(file);
+                long size = new FileInfo(file).Length;
+                if (++count > MaxFiles || size > MaxFileBytes || (total += size) > MaxTotalBytes)
+                    throw new InvalidOperationException("Pet exceeds file count or size limits.");
+                using var input = File.OpenRead(file);
+                using var output = File.Create(Path.Combine(to, Path.GetFileName(file)));
+                CopyStreamBounded(input, output, size, cancellationToken);
+            }
+            foreach (string directory in Directory.EnumerateDirectories(from)) Copy(directory, Path.Combine(to, Path.GetFileName(directory)), depth + 1);
         }
-        foreach (string sub in Directory.EnumerateDirectories(source))
+        Copy(source, destination, 0);
+    }
+
+    private static void ExtractBounded(string zipPath, string destination, CancellationToken cancellationToken)
+    {
+        if (new FileInfo(zipPath).Length > 100L * 1024 * 1024) throw new InvalidOperationException("Zip exceeds 100 MiB.");
+        Directory.CreateDirectory(destination);
+        using var zip = ZipFile.OpenRead(zipPath);
+        if (zip.Entries.Count > MaxFiles) throw new InvalidOperationException("Zip exceeds 1024 entries.");
+        long total = 0;
+        foreach (var entry in zip.Entries)
         {
-            CopyDirectory(sub, Path.Combine(dest, Path.GetFileName(sub)));
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((entry.ExternalAttributes >> 16 & 0xF000) == 0xA000) throw new InvalidOperationException("Zip links are not allowed.");
+            string relative = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
+            if (relative.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length > MaxDepth + 1)
+                throw new InvalidOperationException("Zip exceeds maximum folder depth.");
+            string target = PetPathPolicy.ResolveContainedFile(destination, relative);
+            if (entry.Length > MaxFileBytes || (total += entry.Length) > MaxTotalBytes) throw new InvalidOperationException("Zip exceeds extraction size limits.");
+            if (entry.Name.Length == 0) { Directory.CreateDirectory(target); continue; }
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            using var input = entry.Open();
+            using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write);
+            CopyStreamBounded(input, output, entry.Length, cancellationToken);
         }
+    }
+
+    private static void CopyStreamBounded(Stream input, Stream output, long expected, CancellationToken token)
+    {
+        var buffer = new byte[81920]; long copied = 0; int read;
+        while ((read = input.Read(buffer, 0, buffer.Length)) != 0)
+        {
+            token.ThrowIfCancellationRequested();
+            copied += read;
+            if (copied > expected || copied > MaxFileBytes) throw new InvalidOperationException("File grew beyond the validated size.");
+            output.Write(buffer, 0, read);
+        }
+        if (copied != expected) throw new InvalidOperationException("File size changed during import.");
     }
 }

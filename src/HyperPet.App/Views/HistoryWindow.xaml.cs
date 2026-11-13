@@ -45,7 +45,7 @@ public partial class HistoryWindow : Window
     {
         if (HistoryListBox.SelectedItem is not NotificationHistoryEntry entry) { return; }
         bool accepted = _replay(entry.Alert);
-        HistoryStatusText.Text = accepted ? "Queued for display." : "Alerts are paused, quiet hours are active, or the app is closing.";
+        HistoryStatusText.Text = accepted ? "Queued for display." : "Alerts are paused, this source is disabled, quiet hours are active, or the app is closing.";
     }
 
     private void OnClearHistoryClick(object sender, RoutedEventArgs e) => _inbox.ClearHistory();

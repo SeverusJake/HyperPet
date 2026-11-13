@@ -36,6 +36,13 @@ public sealed class PetAnimator
 
     /// <summary>FPS of the currently-playing state, or 1 when none.</summary>
     public int CurrentFps => _state?.Fps ?? 1;
+    public int RemainingTicksInPass => _state?.PlayMode switch
+    {
+        PlayMode.Reverse => _frameIndex + 1,
+        PlayMode.PingPong when _direction > 0 => Math.Max(1, 2 * _frames.Count - 1 - _frameIndex),
+        PlayMode.PingPong => _frameIndex + 1,
+        _ => Math.Max(1, _frames.Count - _frameIndex)
+    };
 
     /// <summary>
     /// Raised once when a non-looping state reaches its natural end. The
@@ -68,7 +75,7 @@ public sealed class PetAnimator
             return;
         }
 
-        if (_frames.Count <= 1)
+        if (_frames.Count <= 1 && _state.Loop)
         {
             return;
         }
@@ -93,7 +100,7 @@ public sealed class PetAnimator
             return;
         }
 
-        if (_frames.Count <= 1 || _state is null)
+        if (_state is null || (_frames.Count <= 1 && _state.Loop))
         {
             return;
         }

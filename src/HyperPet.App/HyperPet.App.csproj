@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <StartupObject>HyperPet.App.App</StartupObject>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -10,11 +11,22 @@
     <AssemblyName>HyperPet</AssemblyName>
     <Product>HyperPet</Product>
     <ApplicationIcon>Assets\HyperPet.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WPF owns startup and DPI; WinForms is used only for native helpers/tray. -->
+    <NoWarn>$(NoWarn);WFAC010;WFO0003</NoWarn>
     <Version>0.7.1</Version>
-    <AssemblyVersion>0.7.1.0</AssemblyVersion>
-    <FileVersion>0.7.1.0</FileVersion>
-    <InformationalVersion>0.7.1</InformationalVersion>
+
+
+
   </PropertyGroup>
+  <ItemGroup Condition="'$(SelfContained)' == 'true'">
+    <FrameworkReference Update="Microsoft.NETCore.App" RuntimeFrameworkVersion="10.0.15" />
+    <FrameworkReference Update="Microsoft.WindowsDesktop.App" RuntimeFrameworkVersion="10.0.15" />
+  </ItemGroup>
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
   <ItemGroup>
     <!-- UseWindowsForms=true (needed for System.Windows.Forms.Cursor in Summon)
          injects these implicit global usings, which collide with WPF and
@@ -43,18 +55,5 @@
     <None Include="Package.appxmanifest" />
     <None Update="SkiaSharp-LICENSE.txt;SkiaSharp-THIRD-PARTY-NOTICES.txt"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Update="Properties\Settings.Designer.cs">
-      <DesignTimeSharedInput>True</DesignTimeSharedInput>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Settings.settings</DependentUpon>
-    </Compile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Update="Properties\Settings.settings">
-      <Generator>SettingsSingleFileGenerator</Generator>
-      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
-    </None>
   </ItemGroup>
 </Project>

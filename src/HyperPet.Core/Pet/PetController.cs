@@ -52,7 +52,7 @@ public sealed class PetController
             body,
             notification.Timestamp,
             notification.CanActivate,
-            notification.AppUserModelId);
+            notification.AppUserModelId, notification.Source);
 
         CurrentAlert = alert;
         State = PetState.Alerting;

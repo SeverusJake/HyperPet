@@ -90,6 +90,15 @@ public sealed class NotificationInbox
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    public void RemoveSource(NotificationSource source)
+    {
+        var retained = _pending.Where(alert => alert.Source != source).ToArray();
+        bool changed = retained.Length != _pending.Count || Current?.Source == source;
+        _pending.Clear(); foreach (var alert in retained) _pending.Enqueue(alert);
+        if (Current?.Source == source) Current = _pending.TryDequeue(out var next) ? next : null;
+        if (changed) Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     public void RedactContent()
     {
         var changed = false;

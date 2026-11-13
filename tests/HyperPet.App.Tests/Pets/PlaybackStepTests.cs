@@ -35,11 +35,13 @@ public class PlaybackStepTests
     }
 
     [Fact]
-    public void PingPong_Flips_AtEnd_AndCompletesOnForwardEnd()
+    public void PingPong_FlipsAtFarEnd_AndCompletesAfterReturn()
     {
         var atEnd = PlaybackStep.Next(PlayMode.PingPong, index: 2, direction: 1, frameCount: 3);
-        Assert.True(atEnd.Completed);
+        Assert.False(atEnd.Completed);
         Assert.Equal(-1, atEnd.Direction);
+        var returned = PlaybackStep.Next(PlayMode.PingPong, index: 0, direction: -1, frameCount: 3);
+        Assert.True(returned.Completed);
 
         var mid = PlaybackStep.Next(PlayMode.PingPong, index: 0, direction: 1, frameCount: 3);
         Assert.Equal(1, mid.Index);

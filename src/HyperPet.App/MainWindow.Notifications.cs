@@ -15,6 +15,7 @@ public partial class MainWindow
 
     private bool QueueAlert(PetAlert alert, bool recordHistory)
     {
+        if (!IsSourceEnabled(alert.Source)) return false;
         if (!CanShowAlerts())
         {
             if (!_tuckingAway) { DismissAlert(); }
@@ -31,6 +32,9 @@ public partial class MainWindow
     private bool CanShowAlerts() => !_tuckingAway && !_settings.AlertsPaused
         && !(_settings.QuietHoursEnabled && QuietHoursSchedule.IsActive(
             TimeOnly.FromDateTime(DateTime.Now), _settings.QuietHoursStart, _settings.QuietHoursEnd));
+
+    private bool IsSourceEnabled(NotificationSource source) => source == NotificationSource.InApp
+        ? _settings.ReactToInAppNotifications : _settings.ReactToWindowsNotifications;
 
     private void PresentAlert(PetAlert alert)
     {
@@ -90,6 +94,14 @@ public partial class MainWindow
     internal void RefreshNotificationPreferences()
     {
         _viewModel.AlertsPaused = _settings.AlertsPaused;
+        var previous = _notificationInbox.Current;
+        if (!_settings.ReactToWindowsNotifications) _notificationInbox.RemoveSource(NotificationSource.Windows);
+        if (!_settings.ReactToInAppNotifications) _notificationInbox.RemoveSource(NotificationSource.InApp);
+        if (previous != _notificationInbox.Current)
+        {
+            if (_notificationInbox.Current is { } next) PresentAlert(next);
+            else DismissAlert();
+        }
         if (!_settings.ShowFullNotificationContent)
         {
             _notificationInbox.RedactContent();

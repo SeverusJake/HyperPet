@@ -18,8 +18,9 @@ public static class PetRemover
 
         string dir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
         string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(userPetsRoot));
-
-        return dir.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        try { PetPathPolicy.RejectReparseAncestors(dir); }
+        catch { return false; }
+        return string.Equals(Path.GetDirectoryName(dir), root, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

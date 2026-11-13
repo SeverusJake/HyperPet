@@ -21,7 +21,7 @@
 
         <TextBlock Grid.Row="1"
                    Margin="0,18,0,0"
-                   Text="HyperPet needs Windows notification access so your pet can react to alerts. Notification content stays on this device and is used only to show the pet alert bubble."
+                   Text="HyperPet needs Windows notification access so your pet can react to alerts. Notification content stays on this device. Bubbles and history are held in memory for this session; diagnostic logs do not include message titles or bodies."
                    TextWrapping="Wrap" />
 
         <TextBlock x:Name="StatusText"

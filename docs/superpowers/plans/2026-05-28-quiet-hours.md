@@ -1,3 +1,5 @@
+> Historical engineering record. Read docs/README.md for current guidance; do not re-execute this plan against HEAD.
+
 # Quiet Hours (Scheduled DND) Implementation Plan
 
 **Goal:** Suppress pet alerts during a user-set daily time window (handles overnight wrap).

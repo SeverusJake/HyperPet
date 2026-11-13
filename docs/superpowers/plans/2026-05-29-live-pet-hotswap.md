@@ -1,3 +1,5 @@
+> Historical engineering record. Read docs/README.md for current guidance; do not re-execute this plan against HEAD.
+
 # Live Pet Hot-Swap Implementation Plan
 
 **Goal:** Switching the pet in Settings applies immediately (rebuild the sprite + animator at runtime) instead of requiring a restart.

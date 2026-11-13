@@ -1,3 +1,5 @@
+> Historical review of v0.6.1. ImageSharp/uninstall/Tuck Away findings have since changed. See the 2026-11-12 audit and remediation status for HEAD.
+
 # HyperPet v0.6.1 — review ngày 11/11/2026
 
 ## Phạm vi và kiểm chứng

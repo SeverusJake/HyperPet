@@ -1,0 +1,37 @@
+name: Windows verification
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore and test
+        run: dotnet test HyperPet.sln --configuration Release
+      - name: Dependency audit
+        shell: pwsh
+        run: |
+          $raw = dotnet list HyperPet.sln package --vulnerable --include-transitive --format json
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency audit failed.' }
+          $audit = ($raw -join "`n") | ConvertFrom-Json
+          foreach ($framework in $audit.projects.frameworks) {
+            foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
+              if ($package.vulnerabilities.Count -gt 0) { throw "Advisory: $($package.id)" }
+            }
+          }
+      - name: Release safeguard tests
+        shell: pwsh
+        run: ./tests/ReleaseScripts.Tests.ps1
+      - name: Verify self-contained publish
+        run: dotnet publish src/HyperPet.App/HyperPet.App.csproj -c Release -r win-x64 --self-contained true -o publish/ci
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-verification
+          path: publish/ci/
+          retention-days: 7

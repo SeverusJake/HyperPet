@@ -1,3 +1,5 @@
+> Historical engineering record. Read docs/README.md for current guidance; do not re-execute this plan against HEAD.
+
 # Desktop Window-Perch Mode Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

@@ -12,7 +12,7 @@ public static class SpritePetLoader
     {
         PetDefinition definition = await PetDefinitionLoader.LoadAsync(petDirectory)
             .ConfigureAwait(false);
-        string path = Path.Combine(petDirectory, definition.SpritesheetPath);
+        string path = PetPathPolicy.ResolveContainedFile(petDirectory, definition.SpritesheetPath);
 
         // Decode and crop off the UI thread.
         return await Task.Run(() => LoadFrames(definition, path)).ConfigureAwait(false);
@@ -23,6 +23,11 @@ public static class SpritePetLoader
         using var input = File.OpenRead(path);
         using var codec = SKCodec.Create(input)
             ?? throw new InvalidOperationException($"Could not decode spritesheet '{definition.SpritesheetPath}'.");
+        if (codec.Info.Width > 8192 || codec.Info.Height > 8192 ||
+            (long)codec.Info.Width * codec.Info.Height > 16_777_216 ||
+            definition.States.Count > 32 || definition.States.Values.Sum(state => (long)state.Frames) > 256 ||
+            definition.States.Values.Sum(state => (long)state.Frames) * definition.FrameWidth * definition.FrameHeight * 4 > 256L * 1024 * 1024)
+            throw new InvalidOperationException("Pet exceeds decoded image/frame limits.");
         var info = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
         using var spritesheet = SKBitmap.Decode(codec, info)
             ?? throw new InvalidOperationException($"Could not decode spritesheet '{definition.SpritesheetPath}'.");

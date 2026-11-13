@@ -20,39 +20,51 @@ public partial class SettingsWindow : Window
 {
     private readonly HyperPetSettings _settings;
     private readonly Action<bool> _applyStartupSetting;
+    private readonly bool _canManageStartup;
     private readonly Action? _applySettings;
     private readonly ObservableCollection<MessagingAppRuleViewModel> _messagingApps;
     private readonly ObservableCollection<StateSpeedRowViewModel> _stateSpeeds;
-    private readonly SpritePet? _spritePet;
-    private readonly IReadOnlyDictionary<string, int>? _originalStateFps;
-    private readonly IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
+    private SpritePet? _spritePet;
+    private IReadOnlyDictionary<string, int>? _originalStateFps;
+    private IReadOnlyDictionary<string, PlayMode>? _originalStatePlayMode;
     private readonly UpdateService? _updateService;
     private readonly Func<UpdateInfo, Task>? _promptAndApply;
     private IReadOnlyList<PetCatalogEntry> _petCatalog;
     private string _originalSelectedPet;
-    private readonly Func<string, Task>? _reloadPet;
+    private readonly Func<string, CancellationToken, Task<PreparedPetReload?>>? _preparePet;
+    private readonly Func<PreparedPetReload, CancellationToken, bool>? _canCommitPet;
+    private readonly Action<PreparedPetReload>? _commitPet;
+    internal Action<string>? CommitWarning { get; set; }
+    private void WarnCommit(string message)
+    {
+        if (CommitWarning is not null) CommitWarning(message);
+        else MessageBox.Show(this, message, "HyperPet", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
     private readonly string _userPetsRoot;
     private readonly Func<Task<IReadOnlyList<PetCatalogEntry>>>? _rediscoverPets;
     private bool _initializing = true;
     private bool _dirty;
+    private bool _committing;
+    private bool _closed;
+    private readonly CancellationTokenSource _lifetime = new();
     // Sticky: flips true on first user edit, never goes false again for the
     // lifetime of this dialog. Drives the Save button so Save stays clickable
     // even after Apply commits the current pending edits.
     private bool _anyEditMade;
 
-    // General-tab factory defaults — used by the Default button to restore
-    // the dialog to a known clean state. These mirror HyperPetSettings.CreateDefault().
-    private const bool DefaultShowFullContent = true;
-    private const bool DefaultStartWithWindows = true;
-    private const bool DefaultReactToWindowsNotifications = true;
-    private const bool DefaultReactToInAppNotifications = true;
-    private const PetBehaviorMode DefaultPetBehaviorMode = PetBehaviorMode.Calm;
-    private const bool DefaultDebugMode = false;
-    private const int DefaultAlertDuration = 8;
-    private const int DefaultPetSize = 8;
-    private const int DefaultRunningSpeed = 2;
-    private const int DefaultWindowsPollInterval = 30;
-    private const int DefaultInAppPollInterval = 2;
+    // Factory defaults come from the same model used by settings persistence.
+    private static readonly HyperPetSettings Defaults = HyperPetSettings.CreateDefault();
+    private static bool DefaultShowFullContent => Defaults.ShowFullNotificationContent;
+    private static bool DefaultStartWithWindows => Defaults.StartWithWindows;
+    private static bool DefaultReactToWindowsNotifications => Defaults.ReactToWindowsNotifications;
+    private static bool DefaultReactToInAppNotifications => Defaults.ReactToInAppNotifications;
+    private static PetBehaviorMode DefaultPetBehaviorMode => Defaults.PetBehaviorMode;
+    private static bool DefaultDebugMode => Defaults.DebugMode;
+    private static int DefaultAlertDuration => Defaults.AlertDurationSeconds;
+    private static int DefaultPetSize => Defaults.PetSize;
+    private static int DefaultRunningSpeed => Defaults.RunningSpeed;
+    private static int DefaultWindowsPollInterval => Defaults.WindowsNotificationPollIntervalSeconds;
+    private static int DefaultInAppPollInterval => Defaults.InAppNotificationPollIntervalSeconds;
 
     public SettingsWindow(
         HyperPetSettings settings,
@@ -64,12 +76,15 @@ public partial class SettingsWindow : Window
         UpdateService? updateService = null,
         Func<UpdateInfo, Task>? promptAndApply = null,
         IReadOnlyList<PetCatalogEntry>? petCatalog = null,
-        Func<string, Task>? reloadPet = null,
         string? userPetsRoot = null,
-        Func<Task<IReadOnlyList<PetCatalogEntry>>>? rediscoverPets = null)
+        Func<Task<IReadOnlyList<PetCatalogEntry>>>? rediscoverPets = null, bool canManageStartup = true,
+        Func<string, CancellationToken, Task<PreparedPetReload?>>? preparePet = null,
+        Func<PreparedPetReload, CancellationToken, bool>? canCommitPet = null,
+        Action<PreparedPetReload>? commitPet = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
+        _canManageStartup = canManageStartup;
         _applySettings = applySettings;
         _spritePet = spritePet;
         _originalStateFps = originalStateFps;
@@ -78,14 +93,17 @@ public partial class SettingsWindow : Window
         _promptAndApply = promptAndApply;
         _petCatalog = petCatalog ?? Array.Empty<PetCatalogEntry>();
         _originalSelectedPet = settings.SelectedPet;
-        _reloadPet = reloadPet;
+        _preparePet = preparePet; _canCommitPet = canCommitPet; _commitPet = commitPet;
         _userPetsRoot = userPetsRoot ?? string.Empty;
         _rediscoverPets = rediscoverPets;
 
         InitializeComponent();
+        Closed += (_, _) => { _closed = true; _lifetime.Cancel(); };
 
         ShowFullContentCheckBox.IsChecked = settings.ShowFullNotificationContent;
         StartWithWindowsCheckBox.IsChecked = settings.StartWithWindows;
+        StartWithWindowsCheckBox.IsEnabled = canManageStartup;
+        if (!canManageStartup) StartWithWindowsCheckBox.ToolTip = "Only an installed app with readable settings can change Windows startup.";
         RememberPetPositionCheckBox.IsChecked = settings.RememberPetPosition;
         RefreshMonitors(settings.PreferredMonitorId);
         ReactToWindowsNotificationsCheckBox.IsChecked = settings.ReactToWindowsNotifications;
@@ -335,6 +353,7 @@ public partial class SettingsWindow : Window
 
     private async void OnAddPetFromZipClick(object sender, RoutedEventArgs e)
     {
+        if (_committing || _closed) return;
         var dialog = new OpenFileDialog
         {
             Title = "Select a pet zip",
@@ -346,12 +365,16 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        var result = await PetImporter.ImportFromZipAsync(dialog.FileName, _userPetsRoot, ConfirmOverwrite);
-        await HandleImportResultAsync(result);
+        await RunPetOperationAsync(async () =>
+        {
+            var result = await PetImporter.ImportFromZipAsync(dialog.FileName, _userPetsRoot, ConfirmOverwrite, BuiltinPetIds(), _lifetime.Token);
+            if (!_closed) await HandleImportResultAsync(result);
+        });
     }
 
     private async void OnAddPetFromFolderClick(object sender, RoutedEventArgs e)
     {
+        if (_committing || _closed) return;
         var dialog = new OpenFolderDialog
         {
             Title = "Select a pet folder",
@@ -361,9 +384,16 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        var result = await PetImporter.ImportFromFolderAsync(dialog.FolderName, _userPetsRoot, ConfirmOverwrite);
-        await HandleImportResultAsync(result);
+        await RunPetOperationAsync(async () =>
+        {
+            var result = await PetImporter.ImportFromFolderAsync(dialog.FolderName, _userPetsRoot, ConfirmOverwrite, BuiltinPetIds(), _lifetime.Token);
+            if (!_closed) await HandleImportResultAsync(result);
+        });
     }
+
+    private IReadOnlySet<string> BuiltinPetIds() => _petCatalog
+        .Where(entry => !PetRemover.IsRemovable(entry.Directory, _userPetsRoot))
+        .Select(entry => entry.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private bool ConfirmOverwrite(string id)
     {
@@ -387,6 +417,7 @@ public partial class SettingsWindow : Window
         }
 
         await RefreshCatalogAsync();
+        if (_closed) return;
         MessageBox.Show(
             this,
             $"Added '{result.Entry!.DisplayName}'. Select it from the Pet list and click Apply to use it.",
@@ -397,6 +428,7 @@ public partial class SettingsWindow : Window
 
     private async void OnRemovePetClick(object sender, RoutedEventArgs e)
     {
+        if (_committing || _closed) return;
         if (PetPickerComboBox.SelectedItem is not PetCatalogEntry entry
             || !PetRemover.IsRemovable(entry.Directory, _userPetsRoot))
         {
@@ -413,22 +445,52 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        PetRemover.TryRemove(entry.Directory, _userPetsRoot);
+        var result = await RemovePetAsync(entry);
+        if (!_closed && result.Error is not null)
+            WarnCommit(result.Error + (result.RecoveryDirectory is null ? "" : "\nRecovery folder: " + result.RecoveryDirectory));
+    }
 
-        bool removedActive = string.Equals(entry.Id, _settings.SelectedPet, StringComparison.OrdinalIgnoreCase);
-        await RefreshCatalogAsync();
-
-        if (removedActive && _petCatalog.Count > 0)
+    internal async Task<PetRemovalResult> RemovePetAsync(PetCatalogEntry entry)
+    {
+        if (_committing || _closed) return new(false, "Another operation is active or the dialog is closed.", null);
+        _committing = true; IsEnabled = false;
+        PreparedPetReload? committedFallback = null;
+        try
         {
-            string fallbackId = _petCatalog[0].Id;
-            _settings.SelectedPet = fallbackId;
-            PetPickerComboBox.SelectedValue = fallbackId;
-            _applySettings?.Invoke();
-            if (_reloadPet is not null)
+            var result = await new PetRemovalService().RemoveAsync(_userPetsRoot, entry, _spritePet?.Definition.Id ?? _settings.SelectedPet, _petCatalog,
+                (id, token) => _preparePet is null ? Task.FromResult<PreparedPetReload?>(null) : _preparePet(id, token),
+                prepared =>
+                {
+                    if (_closed || _canCommitPet is null || _commitPet is null || !_canCommitPet(prepared, _lifetime.Token)) return false;
+                    _commitPet(prepared);
+                    _settings.SelectedPet = prepared.Pet.Definition.Id;
+                    _originalSelectedPet = _settings.SelectedPet;
+                    committedFallback = prepared;
+                    return true;
+                }, _lifetime.Token);
+            if (result.Success)
             {
-                _ = _reloadPet(fallbackId);
+                if (!_closed && committedFallback is not null)
+                    SetActivePet(new(committedFallback.Pet, committedFallback.OriginalFps, committedFallback.OriginalModes, null));
+                _applySettings?.Invoke();
             }
+            if (!_closed)
+            {
+                try { await RefreshCatalogAsync(); }
+                catch (Exception exception) { return result with { Error = (result.Error ?? "") + "\nCatalog refresh failed: " + exception.Message }; }
+            }
+            return result;
         }
+        finally { _committing = false; if (!_closed) IsEnabled = true; }
+    }
+
+    private async Task RunPetOperationAsync(Func<Task> operation)
+    {
+        if (_committing || _closed) return;
+        _committing = true; IsEnabled = false;
+        try { await operation(); }
+        catch (Exception exception) { if (!_closed) WarnCommit(exception.Message); }
+        finally { _committing = false; if (!_closed) IsEnabled = true; }
     }
 
     private async Task RefreshCatalogAsync()
@@ -439,7 +501,9 @@ public partial class SettingsWindow : Window
         }
 
         string? selected = PetPickerComboBox.SelectedValue as string;
-        _petCatalog = await _rediscoverPets();
+        var catalog = await _rediscoverPets();
+        if (_closed) return;
+        _petCatalog = catalog;
         PetPickerComboBox.ItemsSource = _petCatalog;
         PetPickerComboBox.SelectedValue = selected;
         if (PetPickerComboBox.SelectedItem is null && _petCatalog.Count > 0)
@@ -541,9 +605,30 @@ public partial class SettingsWindow : Window
         e.Handled = !int.TryParse(e.Text, out _);
     }
 
-    private bool CommitChanges()
+    internal async Task<bool> CommitChanges()
     {
-        bool requestedStartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
+        if (_committing || _closed) return false;
+        foreach (var (box, minimum, maximum) in new[] {
+            (AlertDurationTextBox, 1, 600), (WindowsPollIntervalTextBox, 5, 600),
+            (InAppPollIntervalTextBox, 1, 60), (PetSizeTextBox, 1, 10), (RunningSpeedTextBox, 1, 20) })
+        {
+            if (!int.TryParse(box.Text, out int number) || number < minimum || number > maximum)
+            {
+                box.ToolTip = $"Enter a whole number from {minimum} to {maximum}.";
+                box.BorderBrush = System.Windows.Media.Brushes.Red; box.Focus(); return false;
+            }
+            box.ClearValue(Control.BorderBrushProperty);
+        }
+        foreach (var box in new[] { QuietHoursStartTextBox, QuietHoursEndTextBox })
+        {
+            if (QuietHoursSchedule.TryParse(box.Text) is null)
+            {
+                box.ToolTip = "Enter time as HH:mm (00:00–23:59).";
+                box.BorderBrush = System.Windows.Media.Brushes.Red; box.Focus(); return false;
+            }
+            box.ClearValue(Control.BorderBrushProperty);
+        }
+        bool requestedStartWithWindows = _canManageStartup ? StartWithWindowsCheckBox.IsChecked == true : _settings.StartWithWindows;
         PetBehaviorMode requestedPetBehaviorMode = PetBehaviorComboBox.SelectedIndex switch
         {
             1 => PetBehaviorMode.Running,
@@ -557,8 +642,9 @@ public partial class SettingsWindow : Window
         int petSize = ParseOrDefault(PetSizeTextBox.Text, _settings.PetSize);
         int runningSpeed = ParseOrDefault(RunningSpeedTextBox.Text, _settings.RunningSpeed);
 
+        var candidate = SettingsDraft.Clone(_settings);
         bool applied = SettingsWindowSettingsApplier.TryApply(
-            _settings,
+            candidate,
             ShowFullContentCheckBox.IsChecked == true,
             requestedPetBehaviorMode,
             alertDuration,
@@ -575,51 +661,99 @@ public partial class SettingsWindow : Window
             QuietHoursStartTextBox.Text,
             QuietHoursEndTextBox.Text,
             _messagingApps.Select(vm => vm.ToModel()).ToList(),
-            _applyStartupSetting,
-            message =>
-            {
-                StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
-                MessageBox.Show(
-                    this,
-                    message,
-                    "HyperPet Settings",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            });
+            _ => { }, WarnCommit);
 
         if (!applied)
         {
             return false;
         }
 
-        // After the main applier has run, write the state-speed overrides for
-        // the current pet into _settings and mutate the live PetDefinition so
-        // the change takes effect immediately (caller restarts the animator).
-        _settings.AutoUpdate = AutoUpdateCheckBox.IsChecked == true;
-        _settings.RememberPetPosition = RememberPetPositionCheckBox.IsChecked == true;
-        _settings.PreferredMonitorId = MonitorPickerComboBox.SelectedValue as string ?? string.Empty;
-        if (PetPickerComboBox.SelectedValue is string selectedPetId && !string.IsNullOrWhiteSpace(selectedPetId))
+        candidate.AutoUpdate = AutoUpdateCheckBox.IsChecked == true;
+        candidate.RememberPetPosition = RememberPetPositionCheckBox.IsChecked == true;
+        candidate.PreferredMonitorId = MonitorPickerComboBox.SelectedValue as string ?? string.Empty;
+        ApplyStateSpeedChanges(candidate);
+        string? selectedPetId = PetPickerComboBox.SelectedValue as string;
+        bool changingPet = !string.IsNullOrWhiteSpace(selectedPetId) &&
+            !string.Equals(selectedPetId, _originalSelectedPet, StringComparison.OrdinalIgnoreCase);
+        _committing = true; IsEnabled = false;
+        HyperPetSettings? previous = null;
+        bool startupApplied = false;
+        bool committed = false;
+        try
         {
-            _settings.SelectedPet = selectedPetId;
+            PreparedPetReload? prepared = null;
+            if (changingPet)
+            {
+                if (_preparePet is null || _canCommitPet is null || _commitPet is null)
+                    throw new InvalidOperationException("Pet switching is unavailable in this dialog.");
+                prepared = await _preparePet(selectedPetId!, _lifetime.Token);
+                if (_closed) return false;
+                if (prepared is null || !_canCommitPet(prepared, _lifetime.Token))
+                    throw new InvalidOperationException("Pet load failed or was superseded.");
+                candidate.SelectedPet = selectedPetId!;
+            }
+            if (_closed) return false;
+            previous = SettingsDraft.Clone(_settings);
+            // Runtime-owned values may have changed during the preparation await.
+            candidate.AlertsPaused = _settings.AlertsPaused;
+            candidate.PetLeft = _settings.PetLeft; candidate.PetTop = _settings.PetTop;
+            // Everything following preparation runs synchronously on the dispatcher.
+            if (candidate.StartWithWindows != previous.StartWithWindows)
+            {
+                _applyStartupSetting(candidate.StartWithWindows);
+                startupApplied = true;
+            }
+            SettingsDraft.CopyTo(candidate, _settings);
+            if (prepared is not null)
+            {
+                _commitPet!(prepared);
+                SetActivePet(new(prepared.Pet, prepared.OriginalFps, prepared.OriginalModes, null));
+            }
+            else ApplyLiveStateOverrides();
+            _originalSelectedPet = _settings.SelectedPet;
+            committed = true;
         }
-        ApplyStateSpeedChanges();
-
+        catch (Exception exception)
+        {
+            if (previous is not null) { SettingsDraft.CopyTo(previous, _settings); ApplyLiveStateOverrides(); }
+            string warning = exception.Message;
+            if (startupApplied)
+            {
+                try { _applyStartupSetting(previous!.StartWithWindows); }
+                catch (Exception rollback) { warning += "\nStartup rollback failed: " + rollback.Message; }
+            }
+            if (!_closed) WarnCommit(warning);
+            return false;
+        }
+        finally { _committing = false; if (!_closed) IsEnabled = true; }
+        if (!committed) return false;
         _applySettings?.Invoke();
         _dirty = false;
         UpdateButtonState();
 
-        if (!string.Equals(_settings.SelectedPet, _originalSelectedPet, StringComparison.OrdinalIgnoreCase)
-            && _reloadPet is not null)
-        {
-            // Live-swap the pet; fire-and-forget on the UI dispatcher.
-            _ = _reloadPet(_settings.SelectedPet);
-            _originalSelectedPet = _settings.SelectedPet; // don't re-swap on next Apply
-        }
-
         return true;
     }
 
-    private void ApplyStateSpeedChanges()
+    private void SetActivePet(PetReloadResult result)
+    {
+        _spritePet = result.Pet; _originalStateFps = result.OriginalFps; _originalStatePlayMode = result.OriginalModes;
+        foreach (var row in _stateSpeeds) row.PropertyChanged -= OnStateSpeedPropertyChanged;
+        _stateSpeeds.Clear();
+        foreach (var row in BuildStateSpeedRows()) { _stateSpeeds.Add(row); row.PropertyChanged += OnStateSpeedPropertyChanged; }
+    }
+
+    private void ApplyLiveStateOverrides()
+    {
+        if (_spritePet is null) return;
+        foreach (var (name, state) in _spritePet.Definition.States)
+        {
+            if (_originalStateFps?.TryGetValue(name, out int fps) == true) state.Fps = fps;
+            if (_originalStatePlayMode?.TryGetValue(name, out var mode) == true) state.PlayMode = mode;
+        }
+        PetOverrides.Apply(_spritePet, _settings);
+    }
+
+    private void ApplyStateSpeedChanges(HyperPetSettings candidate)
     {
         if (_spritePet is null)
         {
@@ -628,28 +762,22 @@ public partial class SettingsWindow : Window
 
         string petId = _spritePet.Definition.Id;
 
-        if (!_settings.StateSpeedOverrides.TryGetValue(petId, out var fpsPerPet))
+        if (!candidate.StateSpeedOverrides.TryGetValue(petId, out var fpsPerPet))
         {
             fpsPerPet = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            _settings.StateSpeedOverrides[petId] = fpsPerPet;
+            candidate.StateSpeedOverrides[petId] = fpsPerPet;
         }
 
-        if (!_settings.StatePlayModeOverrides.TryGetValue(petId, out var modePerPet))
+        if (!candidate.StatePlayModeOverrides.TryGetValue(petId, out var modePerPet))
         {
             modePerPet = new Dictionary<string, PlayMode>(StringComparer.OrdinalIgnoreCase);
-            _settings.StatePlayModeOverrides[petId] = modePerPet;
+            candidate.StatePlayModeOverrides[petId] = modePerPet;
         }
 
         foreach (var row in _stateSpeeds)
         {
             int fps = Math.Clamp(row.Fps, 1, 60);
             row.Fps = fps;
-
-            if (_spritePet.Definition.States.TryGetValue(row.StateName, out var state))
-            {
-                state.Fps = fps;
-                state.PlayMode = row.PlayMode;
-            }
 
             if (fps == row.OriginalFps)
             {
@@ -673,17 +801,17 @@ public partial class SettingsWindow : Window
         // Avoid keeping empty inner dicts in the settings file.
         if (fpsPerPet.Count == 0)
         {
-            _settings.StateSpeedOverrides.Remove(petId);
+            candidate.StateSpeedOverrides.Remove(petId);
         }
         if (modePerPet.Count == 0)
         {
-            _settings.StatePlayModeOverrides.Remove(petId);
+            candidate.StatePlayModeOverrides.Remove(petId);
         }
     }
 
-    private void OnSaveClick(object sender, RoutedEventArgs e)
+    private async void OnSaveClick(object sender, RoutedEventArgs e)
     {
-        if (!CommitChanges())
+        if (!await CommitChanges())
         {
             return;
         }
@@ -692,9 +820,9 @@ public partial class SettingsWindow : Window
         Close();
     }
 
-    private void OnApplyClick(object sender, RoutedEventArgs e)
+    private async void OnApplyClick(object sender, RoutedEventArgs e)
     {
-        CommitChanges();
+        await CommitChanges();
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e)

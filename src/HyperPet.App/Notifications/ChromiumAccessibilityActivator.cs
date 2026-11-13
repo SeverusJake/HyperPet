@@ -15,7 +15,8 @@ namespace HyperPet.App.Notifications;
 public sealed class ChromiumAccessibilityActivator : IDisposable
 {
     private readonly HyperPetLogger? _logger;
-    private readonly HashSet<int> _activatedPids = new();
+    private readonly Dictionary<int, (AutomationElement Element, DateTime Started, IntPtr Hwnd)> _activatedPids = new();
+    private readonly Dictionary<int, DateTime> _retryAfter = new();
     private readonly AutomationPropertyChangedEventHandler _noOpHandler;
     private bool _disposed;
 
@@ -32,7 +33,7 @@ public sealed class ChromiumAccessibilityActivator : IDisposable
     /// </summary>
     public void EnsureActivated(int pid)
     {
-        if (_disposed || _activatedPids.Contains(pid))
+        if (_disposed || (_retryAfter.TryGetValue(pid, out var retry) && DateTime.UtcNow < retry))
         {
             return;
         }
@@ -41,10 +42,18 @@ public sealed class ChromiumAccessibilityActivator : IDisposable
         {
             using var process = Process.GetProcessById(pid);
             IntPtr mainHwnd = process.MainWindowHandle;
+            DateTime started = process.StartTime.ToUniversalTime();
+            if (_activatedPids.TryGetValue(pid, out var active))
+            {
+                if (active.Started == started && active.Hwnd == mainHwnd) return;
+                try { Automation.RemoveAutomationPropertyChangedEventHandler(active.Element, _noOpHandler); } catch { }
+                _activatedPids.Remove(pid);
+            }
             if (mainHwnd == IntPtr.Zero)
             {
-                // Process hasn't created its main window yet; retry on the
-                // next scan without marking the pid as activated.
+                // Electron helpers often never own a main window. Back off instead
+                // of querying their UIA tree on every scan.
+                _retryAfter[pid] = DateTime.UtcNow.AddSeconds(10);
                 return;
             }
 
@@ -60,7 +69,8 @@ public sealed class ChromiumAccessibilityActivator : IDisposable
                 _noOpHandler,
                 AutomationElement.NameProperty);
 
-            _activatedPids.Add(pid);
+            _activatedPids.Add(pid, (element, started, mainHwnd));
+            _retryAfter.Remove(pid);
             _logger?.Info($"ChromiumAccessibilityActivator: woke UIA tree for pid={pid}");
         }
         catch (ArgumentException)
@@ -90,7 +100,13 @@ public sealed class ChromiumAccessibilityActivator : IDisposable
         }
 
         var live = new HashSet<int>(livePids);
-        _activatedPids.RemoveWhere(pid => !live.Contains(pid));
+        foreach (int pid in _retryAfter.Keys.Where(pid => !live.Contains(pid)).ToArray()) _retryAfter.Remove(pid);
+        foreach (int pid in _activatedPids.Keys.Where(pid => !live.Contains(pid)).ToArray())
+        {
+            try { Automation.RemoveAutomationPropertyChangedEventHandler(_activatedPids[pid].Element, _noOpHandler); }
+            catch { }
+            _activatedPids.Remove(pid);
+        }
     }
 
     public void Dispose()
@@ -103,14 +119,16 @@ public sealed class ChromiumAccessibilityActivator : IDisposable
         _disposed = true;
         try
         {
-            Automation.RemoveAllEventHandlers();
+            foreach (var element in _activatedPids.Values)
+                try { Automation.RemoveAutomationPropertyChangedEventHandler(element.Element, _noOpHandler); } catch { }
         }
         catch (Exception exception)
         {
-            _logger?.Warn("ChromiumAccessibilityActivator: RemoveAllEventHandlers failed", exception);
+            _logger?.Warn("ChromiumAccessibilityActivator: subscription cleanup failed", exception);
         }
 
         _activatedPids.Clear();
+        _retryAfter.Clear();
     }
 
     private static void NoOp(object sender, AutomationPropertyChangedEventArgs e)

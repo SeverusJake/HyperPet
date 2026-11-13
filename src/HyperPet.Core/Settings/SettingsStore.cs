@@ -8,6 +8,7 @@ public sealed class SettingsStore
 {
     private const string SettingsFileName = "settings.json";
     private readonly string _settingsPath;
+    private readonly SemaphoreSlim _writeGate = new(1, 1);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -46,20 +47,61 @@ public sealed class SettingsStore
         }
     }
 
+    public async Task<SettingsLoadResult> LoadSessionAsync()
+    {
+        try { return new(await LoadAsync().ConfigureAwait(false), true, true, null); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return new(HyperPetSettings.CreateDefault(), false, false,
+                "Saved settings could not be read. This session will not overwrite them or change Windows startup. " + exception.Message);
+        }
+    }
+
     public async Task SaveAsync(HyperPetSettings settings)
     {
-        var sanitized = Sanitize(settings);
-
-        await using var stream = File.Create(_settingsPath);
-        await JsonSerializer.SerializeAsync(stream, sanitized, JsonOptions).ConfigureAwait(false);
+        var snapshot = Sanitize(settings);
+        await _writeGate.WaitAsync().ConfigureAwait(false);
+        try { await Task.Run(() => WriteSnapshot(snapshot)).ConfigureAwait(false); }
+        finally { _writeGate.Release(); }
     }
 
     public void Save(HyperPetSettings settings)
     {
-        var sanitized = Sanitize(settings);
+        var snapshot = Sanitize(settings);
+        _writeGate.Wait();
+        try { WriteSnapshot(snapshot); }
+        finally { _writeGate.Release(); }
+    }
 
-        using var stream = File.Create(_settingsPath);
-        JsonSerializer.Serialize(stream, sanitized, JsonOptions);
+    private void WriteSnapshot(HyperPetSettings snapshot)
+    {
+        string temporary = _settingsPath + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                JsonSerializer.Serialize(stream, snapshot, JsonOptions);
+                stream.Flush(flushToDisk: true);
+            }
+            if (File.Exists(_settingsPath)) File.Replace(temporary, _settingsPath, _settingsPath + ".bak");
+            else File.Move(temporary, _settingsPath);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    private static Dictionary<string, Dictionary<string, T>> CleanOverrides<T>(Dictionary<string, Dictionary<string, T>>? values, Func<T, bool> valid)
+    {
+        var result = new Dictionary<string, Dictionary<string, T>>(StringComparer.OrdinalIgnoreCase);
+        if (values is null) return result;
+        foreach (var (pet, map) in values)
+        {
+            if (string.IsNullOrWhiteSpace(pet) || map is null) continue;
+            var cleaned = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (state, value) in map)
+                if (!string.IsNullOrWhiteSpace(state) && valid(value)) cleaned[state] = value;
+            if (cleaned.Count > 0) result[pet] = cleaned;
+        }
+        return result;
     }
 
     private static HyperPetSettings Sanitize(HyperPetSettings settings)
@@ -80,8 +122,8 @@ public sealed class SettingsStore
             StartWithWindows = settings.StartWithWindows,
             RememberPetPosition = settings.RememberPetPosition,
             PreferredMonitorId = settings.PreferredMonitorId?.Trim() ?? string.Empty,
-            PetLeft = settings.PetLeft,
-            PetTop = settings.PetTop,
+            PetLeft = double.IsFinite(settings.PetLeft) ? settings.PetLeft : 80,
+            PetTop = double.IsFinite(settings.PetTop) ? settings.PetTop : 80,
             OpenAppOnBubbleClick = settings.OpenAppOnBubbleClick,
             ReactToWindowsNotifications = settings.ReactToWindowsNotifications,
             ReactToInAppNotifications = settings.ReactToInAppNotifications,
@@ -98,8 +140,8 @@ public sealed class SettingsStore
                 : "07:00",
             MessagingApps = SanitizeMessagingApps(settings.MessagingApps),
             WatchedInAppProcesses = settings.WatchedInAppProcesses?.ToList() ?? new List<string> { "Zalo" },
-            StateSpeedOverrides = settings.StateSpeedOverrides ?? new(),
-            StatePlayModeOverrides = settings.StatePlayModeOverrides ?? new()
+            StateSpeedOverrides = CleanOverrides(settings.StateSpeedOverrides, fps => fps is >= 1 and <= 60),
+            StatePlayModeOverrides = CleanOverrides(settings.StatePlayModeOverrides, mode => Enum.IsDefined(mode))
         };
     }
 

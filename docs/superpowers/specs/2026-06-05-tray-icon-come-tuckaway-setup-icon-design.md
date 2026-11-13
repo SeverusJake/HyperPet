@@ -1,3 +1,5 @@
+> Historical engineering record. Read docs/README.md for current guidance; do not re-execute this plan against HEAD.
+
 # Tray Icon, Come / Tuck Away Behaviors, and Setup Icon — Design
 
 **Date:** 2026-06-05

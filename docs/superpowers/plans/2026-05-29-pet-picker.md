@@ -1,3 +1,5 @@
+> Historical engineering record. Read docs/README.md for current guidance; do not re-execute this plan against HEAD.
+
 # Pet Picker Implementation Plan
 
 **Goal:** Let the user choose which pet to display from the pets installed under Assets/Pets, and make the app actually load the selected pet.

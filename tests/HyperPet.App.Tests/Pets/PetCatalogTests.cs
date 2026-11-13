@@ -6,6 +6,19 @@ namespace HyperPet.App.Tests.Pets;
 
 public class PetCatalogTests : IDisposable
 {
+    [Fact]
+    public async Task EnumerationFailsMidRoot_KeepsHealthyEntriesAndOtherRoots()
+    {
+        string first = MakeRoot(), second = MakeRoot();
+        WritePet(first, "a", "a", "Alpha"); WritePet(second, "b", "b", "Beta");
+        IEnumerable<string> Enumerate(string root)
+        {
+            foreach (var dir in Directory.EnumerateDirectories(root)) yield return dir;
+            if (root == first) throw new UnauthorizedAccessException("test root");
+        }
+        var entries = await PetCatalog.DiscoverAsync(Enumerate, first, second);
+        Assert.Equal(new[] { "a", "b" }, entries.Select(e => e.Id));
+    }
     private readonly List<string> _temp = new();
 
     private string MakeRoot()

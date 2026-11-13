@@ -15,6 +15,11 @@ public partial class SetupWindow : Window
             ?? (() => Task.FromResult(NotificationAccessStatus.Unspecified));
     }
 
+    public void SetInitialStatus(NotificationAccessStatus status)
+        => StatusText.Text = status == NotificationAccessStatus.Denied
+            ? "Windows notification access was denied. In-app notifications work independently."
+            : "Windows notification access could not be enabled. This installation may need package identity. In-app notifications work independently.";
+
     private async void OnRequestAccessClick(object sender, RoutedEventArgs e)
     {
         RequestAccessButton.IsEnabled = false;

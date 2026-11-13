@@ -33,8 +33,9 @@ public partial class MainWindow
         double left = double.IsFinite(Left) ? Left : 80;
         double top = double.IsFinite(Top) ? Top : 80;
         WorkArea workArea = GetWorkArea(left, top);
-        Left = Math.Clamp(left, workArea.Left, Math.Max(workArea.Left, workArea.Right - GetWindowWidth()));
-        Top = Math.Clamp(top, workArea.Top, Math.Max(workArea.Top, workArea.Bottom - GetWindowHeight()));
+        Rect sprite = GetSpriteBounds();
+        Left = Math.Clamp(left, workArea.Left - sprite.Left, Math.Max(workArea.Left - sprite.Left, workArea.Right - sprite.Right));
+        Top = Math.Clamp(top, workArea.Top - sprite.Top, Math.Max(workArea.Top - sprite.Top, workArea.Bottom - sprite.Bottom));
     }
 
     private void RestorePetPosition()

@@ -5,9 +5,9 @@ HyperPet is a Windows desktop pet that watches Windows notifications and shows t
 ## Requirements
 
 - Windows 10 build 19041 or newer
-- .NET 8 SDK
+- .NET 10 SDK (see global.json)
 
-This repo also builds with the installed .NET SDK 10.
+Self-contained builds include the pinned .NET 10 servicing runtime. Windows must also be within the runtime vendor's supported OS lifecycle; the build 19041 value is the minimum Windows API contract, not a support promise for every old Windows edition.
 
 ## Build
 
@@ -22,8 +22,9 @@ For every new release, both distribution downloads must include the version:
 - `HyperPet-vX.Y.Z-win-Setup.exe`
 - `HyperPet-vX.Y.Z-win-Portable.zip`
 
-`pack.ps1 -Version X.Y.Z` creates these files, and `release.ps1` uploads them
-to GitHub. Keep Velopack update package and manifest names unchanged.
+`pack.ps1 -Version X.Y.Z -PackDirectory <published-app> -OutputDirectory <empty-output>` creates versioned downloads in isolated output. Restore the pinned CLI with `dotnet tool restore` first.
+
+`release.ps1 -Version X.Y.Z -BuildOnly` verifies tests/audit and creates artifacts, SHA256SUMS.txt and build-manifest.json from a **clean commit whose project version already matches**. It never edits/commits source, creates tags, or pushes branches. Publication requires the explicit `-Publish` flag and an existing remote tag pointing at that exact commit. Keep Velopack update package/manifest names unchanged. Preview builds from an uncommitted working tree are for local verification only.
 
 ## Test
 
@@ -41,7 +42,7 @@ dotnet run --project src/HyperPet.App/HyperPet.App.csproj
 
 ## Startup and Position
 
-In Settings → General, **Start with Windows** is on by default for new settings.
+Installed releases can manage **Start with Windows**, on by default for new settings. Development/portable runs do not take over the installed app's autorun entry. Debug builds use `%LOCALAPPDATA%/HyperPet/Dev`; installed/portable releases keep `%APPDATA%/HyperPet`. One process runs per user/profile; later launches activate the existing pet.
 Saved startup preferences are preserved. **Remember pet position on launch** is
 also on by default. Turn it off to open at the default position instead. Saved
 positions are kept within the nearest available monitor's work area.
@@ -78,7 +79,7 @@ message text; turning it back on does not restore already-redacted content.
 
 Windows may ask for notification access permission. Some apps hide or trim notification content before Windows exposes it, so HyperPet cannot guarantee that the available content is the original full notification text.
 
-If Windows does not show HyperPet in notification access settings, run HyperPet from a packaged install that uses the included `Package.appxmanifest`. An unpackaged development run can start the pet window but may not receive notification-listener permission.
+The current distribution uses Velopack, which does not itself register the included MSIX manifest. Windows notification-listener access may therefore be unavailable in this deployment. The manifest is a packaging template, not proof of runtime identity. See `docs/reviews/2026-11-12-deployment-validation.md` for the deployment validation still required. In-app popup monitoring starts independently, including when Windows access is denied or unavailable.
 
 ## Sprite Images
 
@@ -100,3 +101,13 @@ are included in build and publish output.
 - Restarting the app preserves the pet position and settings.
 - Tuck Away exits even while an alert is visible or the exit animation cannot complete.
 - Uninstall removes the HyperPet entry from the current user's Windows startup Run key.
+
+## Pet import safety
+
+Import validates metadata, actual image/crop bounds and canonical paths before install. Built-in IDs cannot be overwritten. The old pet is renamed to a recovery backup only after staging validates; failed promotion restores it, or preserves and reports the backup path if recovery itself fails.
+
+Limits: pet.json 1 MiB; ZIP 100 MiB compressed; copy/extraction 256 MiB total; 64 MiB per file; 1,024 files; depth 8; 32 states; 256 total frames; image edge 8,192 pixels and total 16,777,216 pixels; decoded frames 256 MiB; FPS 1–60. Symbolic links, junctions, overlapping source/target folders and ambiguous ZIPs with multiple pet.json files are rejected.
+
+## Contributor references
+
+Read `AGENTS.md`, `docs/README.md`, and the current remediation status before older design/implementation records. Generated output is ignored. Run `pwsh -NoProfile -File tests/ReleaseScripts.Tests.ps1` for release-script regression checks; it needs no third-party PowerShell test framework.

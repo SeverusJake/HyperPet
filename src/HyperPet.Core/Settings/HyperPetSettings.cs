@@ -29,8 +29,8 @@ public sealed class HyperPetSettings
     public double PetTop { get; set; } = 80;
 
     /// <summary>
-    /// When true, single-clicking the speech bubble launches the source
-    /// messaging app (when its AppUserModelId is known).
+    /// Legacy persisted preference retained for existing settings files.
+    /// Bubble clicks now always advance/dismiss; this value has no runtime effect.
     /// </summary>
     public bool OpenAppOnBubbleClick { get; set; } = true;
 

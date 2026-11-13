@@ -10,8 +10,6 @@ public interface INotificationListener
 
     Task<IReadOnlyList<HyperNotification>> GetActiveNotificationsAsync(CancellationToken cancellationToken = default);
 
-    Task<bool> TryActivateAsync(HyperNotification notification, CancellationToken cancellationToken = default);
-
     void StartListening();
 
     void StopListening();

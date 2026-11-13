@@ -6,7 +6,7 @@ namespace HyperPet.App;
 
 /// <summary>
 /// System-tray icon shown while HyperPet runs. Right-click menu:
-/// Come, Settings, Check for update, Tuck Away. Double-click opens Settings.
+/// Come, Settings, Notification history, Check for update, Tuck Away. Double-click opens Settings.
 /// Dispose on app exit to avoid a ghost icon.
 /// </summary>
 public sealed class TrayIcon : IDisposable

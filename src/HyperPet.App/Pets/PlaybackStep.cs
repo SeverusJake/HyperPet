@@ -34,7 +34,7 @@ public static class PlaybackStep
                 int next = index + direction;
                 if (next > last)
                 {
-                    return new PlaybackResult(Math.Max(0, last - 1), -1, true);
+                    return new PlaybackResult(Math.Max(0, last - 1), -1, false);
                 }
                 if (next < 0)
                 {

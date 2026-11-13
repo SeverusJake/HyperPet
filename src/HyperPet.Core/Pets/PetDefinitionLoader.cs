@@ -13,6 +13,8 @@ public static class PetDefinitionLoader
     {
         string jsonPath = Path.Combine(petDirectory, "pet.json");
         await using FileStream stream = File.OpenRead(jsonPath);
+        if (stream.Length > 1024 * 1024)
+            throw new InvalidOperationException("Pet metadata exceeds 1 MiB.");
         PetDefinitionFile file = await JsonSerializer.DeserializeAsync<PetDefinitionFile>(stream, JsonOptions)
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException("Pet metadata is empty.");
@@ -65,6 +67,8 @@ public static class PetDefinitionLoader
         {
             throw new InvalidOperationException("Pet metadata must define at least one animation state.");
         }
+        if (file.States.Count > 32 || file.States.Values.Sum(state => (long)(state?.Frames ?? 0)) > 256)
+            throw new InvalidOperationException("Pet metadata exceeds state/frame limits (32 states, 256 total frames).");
 
         foreach ((string stateName, PetAnimationState? state) in file.States)
         {
@@ -83,9 +87,9 @@ public static class PetDefinitionLoader
                 throw new InvalidOperationException($"Pet metadata state '{stateName}' frames must be greater than zero.");
             }
 
-            if (state.Fps <= 0)
+            if (state.Fps <= 0 || state.Fps > 60)
             {
-                throw new InvalidOperationException($"Pet metadata state '{stateName}' fps must be greater than zero.");
+                throw new InvalidOperationException($"Pet metadata state '{stateName}' fps must be between 1 and 60.");
             }
         }
     }

@@ -6,7 +6,8 @@
         Width="500"
         Height="640"
         Icon="/HyperPet;component/Assets/HyperPet.ico"
-        ResizeMode="NoResize">
+        MinWidth="420" MinHeight="240"
+        ResizeMode="CanResize">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

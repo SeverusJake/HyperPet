@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Identity template only: current Velopack distribution does not register this package. -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -10,7 +11,7 @@
   <Identity
     Name="HyperPet.App"
     Publisher="CN=HyperPet"
-    Version="0.1.0.0" />
+    Version="0.7.1.0" />
 
   <Properties>
     <DisplayName>HyperPet</DisplayName>
@@ -28,7 +29,7 @@
   <Applications>
     <Application
       Id="App"
-      Executable="HyperPet.App.exe"
+      Executable="HyperPet.exe"
       EntryPoint="Windows.FullTrustApplication"
       uap10:RuntimeBehavior="packagedClassicApp"
       uap10:TrustLevel="mediumIL">

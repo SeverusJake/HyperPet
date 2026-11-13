@@ -1,3 +1,5 @@
+> Historical engineering record. Read docs/README.md for current guidance; do not re-execute this plan against HEAD.
+
 # Chromium UIA Extraction for In-App Notifications
 
 Date: 2026-05-27

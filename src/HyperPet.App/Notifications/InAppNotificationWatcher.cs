@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Automation;
 using System.Windows.Threading;
@@ -46,16 +46,15 @@ public sealed class InAppNotificationWatcher : IDisposable
         "hwndwrapper[popup",      // WPF popup
     };
 
+    private readonly AutomationWorker _worker = new();
+    private volatile bool _running;
+    private bool _scanning;
+    private int _generation;
+    private int _scanGeneration;
+    private readonly PopupOccurrenceTracker _occurrences = new();
     private readonly DispatcherTimer _timer;
     private readonly HyperPetLogger? _logger;
     private readonly ChromiumAccessibilityActivator _activator;
-    // hwnd -> last emitted content hash. Real Zalo / Electron popups often
-    // reuse the same HWND for successive messages (text swapped in-place);
-    // keying off handle alone would suppress every message after the first.
-    private readonly Dictionary<IntPtr, string> _seenHandles = new();
-    // hwnd -> last window rect + extracted text. Skips the cross-process UI
-    // Automation walk when a popup hasn't moved/resized since last scan.
-    private readonly Dictionary<IntPtr, (RECT Rect, string Title, string Body)> _extractCache = new();
     private readonly HashSet<IntPtr> _excludedHandles = new();
     private readonly string _selfProcessName = Process.GetCurrentProcess().ProcessName;
     private IReadOnlyList<string> _watchedProcessNames = Array.Empty<string>();
@@ -70,7 +69,7 @@ public sealed class InAppNotificationWatcher : IDisposable
         {
             Interval = TimeSpan.FromSeconds(2)
         };
-        _timer.Tick += (_, _) => Scan();
+        _timer.Tick += async (_, _) => await ScanAsync();
     }
 
     /// <summary>
@@ -112,29 +111,48 @@ public sealed class InAppNotificationWatcher : IDisposable
             return;
         }
 
-        // Pre-activate now so the first scan sees a populated Chromium
-        // accessibility tree instead of host-element junk. Discard the
-        // result; the side effect (UIA subscription) is what we want.
-        _ = ResolveWatchedPids();
-
+        _running = true;
         _timer.Start();
+        _ = ScanAsync();
     }
 
-    public void Stop() => _timer.Stop();
+    public void Stop()
+    {
+        _running = false;
+        Interlocked.Increment(ref _generation);
+        _timer.Stop();
+    }
 
     public void Dispose()
     {
         Stop();
-        _activator.Dispose();
-        _seenHandles.Clear();
-        _extractCache.Clear();
+        _ = _worker.RunAsync(() => { _activator.Dispose(); _occurrences.Prune(Array.Empty<IntPtr>()); });
+        _worker.Dispose();
+    }
+
+    private async Task ScanAsync()
+    {
+        if (!_running || _scanning) return;
+        _scanning = true;
+        int generation = Volatile.Read(ref _generation);
+        try
+        {
+            await _worker.RunAsync(() =>
+            {
+                if (!_running || generation != Volatile.Read(ref _generation)) return;
+                _scanGeneration = generation;
+                Scan();
+            });
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { _logger?.Warn("Popup scan failed", exception); }
+        finally { _scanning = false; }
     }
 
     private void Scan()
     {
         if (_watchedProcessNames.Count == 0)
         {
-            _timer.Stop();
             return;
         }
 
@@ -142,7 +160,7 @@ public sealed class InAppNotificationWatcher : IDisposable
         if (watchedPids.Count == 0)
         {
             // Drop stale handle cache so reopens of the app get re-detected.
-            _seenHandles.Clear();
+            _occurrences.Prune(Array.Empty<IntPtr>());
             return;
         }
 
@@ -189,28 +207,10 @@ public sealed class InAppNotificationWatcher : IDisposable
                 bool isSelfProc = string.Equals(processName, _selfProcessName, StringComparison.OrdinalIgnoreCase);
                 string appName = isSelfProc ? "Sim" : processName;
 
-                GetWindowRect(hwnd, out RECT rect);
-                string title, body;
-                if (_extractCache.TryGetValue(hwnd, out var cached) && RectEquals(cached.Rect, rect))
-                {
-                    title = cached.Title;
-                    body = cached.Body;
-                }
-                else
-                {
-                    (title, body) = ExtractText(hwnd, appName);
-                    _extractCache[hwnd] = (rect, title, body);
-                }
-
-                string contentHash = HashText(title + "" + body);
-
-                if (_seenHandles.TryGetValue(hwnd, out string? lastHash) && lastHash == contentHash)
-                {
-                    return true;
-                }
-
-                _seenHandles[hwnd] = contentHash;
-                EmitFor(hwnd, processName, appName, title, body);
+                var (title, body) = ExtractText(hwnd, appName);
+                if (!_running || _scanGeneration != Volatile.Read(ref _generation)) return true;
+                string? sourceId = _occurrences.Observe(hwnd, title, body);
+                if (sourceId is not null) EmitFor(hwnd, processName, appName, title, body, sourceId);
                 return true;
             }, IntPtr.Zero);
         }
@@ -219,18 +219,7 @@ public sealed class InAppNotificationWatcher : IDisposable
             _logger?.Warn("InAppNotificationWatcher EnumWindows failed", exception);
         }
 
-        // Drop handles that no longer exist or moved out of the popup filter.
-        var stale = _seenHandles.Keys.Where(h => !liveHandles.Contains(h)).ToList();
-        foreach (var h in stale)
-        {
-            _seenHandles.Remove(h);
-        }
-
-        var staleExtract = _extractCache.Keys.Where(h => !liveHandles.Contains(h)).ToList();
-        foreach (var h in staleExtract)
-        {
-            _extractCache.Remove(h);
-        }
+        _occurrences.Prune(liveHandles);
     }
 
     private Dictionary<int, string> ResolveWatchedPids()
@@ -356,7 +345,7 @@ public sealed class InAppNotificationWatcher : IDisposable
         return len > 0 ? buffer.ToString() : string.Empty;
     }
 
-    private void EmitFor(IntPtr hwnd, string processName, string appName, string title, string body)
+    private void EmitFor(IntPtr hwnd, string processName, string appName, string title, string body, string sourceId)
     {
 
         if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(body))
@@ -369,7 +358,8 @@ public sealed class InAppNotificationWatcher : IDisposable
             title = appName;
         }
 
-        string sourceId = $"inapp:{appName}:{hwnd.ToInt64():X}:{HashText(title + body)}";
+        if (!_running || _scanGeneration != Volatile.Read(ref _generation)) return;
+
 
         var notification = new HyperNotification(
             sourceId: sourceId,
@@ -378,9 +368,9 @@ public sealed class InAppNotificationWatcher : IDisposable
             body: body,
             timestamp: DateTimeOffset.UtcNow,
             canActivate: false,
-            appUserModelId: appName);
+            appUserModelId: appName, source: NotificationSource.InApp);
 
-        _logger?.Info($"InApp popup detected proc='{processName}' as='{appName}' title='{title}'");
+        _logger?.Info($"InApp popup detected proc='{processName}' hwnd={hwnd.ToInt64():X}");
         Detected?.Invoke(this, notification);
     }
 
@@ -410,7 +400,8 @@ public sealed class InAppNotificationWatcher : IDisposable
             }
 
             var texts = new List<string>();
-            CollectNames(root, TreeWalker.ControlViewWalker, texts);
+            int visited = 0;
+            CollectNames(root, TreeWalker.ControlViewWalker, texts, ref visited, 0);
 
             // Strip platform host-element junk and the app name itself
             // (e.g. "Zalo") so the first remaining names are the actual
@@ -438,9 +429,9 @@ public sealed class InAppNotificationWatcher : IDisposable
         }
     }
 
-    private static void CollectNames(AutomationElement element, TreeWalker walker, List<string> sink)
+    private static void CollectNames(AutomationElement element, TreeWalker walker, List<string> sink, ref int visited, int depth)
     {
-        if (sink.Count >= MaxTextNodes)
+        if (++visited > 256 || depth > 32 || sink.Count >= MaxTextNodes)
         {
             return;
         }
@@ -469,7 +460,8 @@ public sealed class InAppNotificationWatcher : IDisposable
 
         while (child is not null)
         {
-            CollectNames(child, walker, sink);
+            CollectNames(child, walker, sink, ref visited, depth + 1);
+            if (visited >= 256 || sink.Count >= MaxTextNodes) return;
             try
             {
                 child = walker.GetNextSibling(child);
@@ -479,17 +471,6 @@ public sealed class InAppNotificationWatcher : IDisposable
                 return;
             }
         }
-    }
-
-    private static string HashText(string text)
-    {
-        int hash = 17;
-        foreach (char c in text)
-        {
-            hash = hash * 31 + c;
-        }
-
-        return hash.ToString("X");
     }
 
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
@@ -518,9 +499,6 @@ public sealed class InAppNotificationWatcher : IDisposable
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
-
-    private static bool RectEquals(RECT a, RECT b)
-        => a.Left == b.Left && a.Top == b.Top && a.Right == b.Right && a.Bottom == b.Bottom;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT

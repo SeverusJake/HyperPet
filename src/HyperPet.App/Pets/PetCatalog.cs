@@ -15,7 +15,10 @@ public static class PetCatalog
     /// ordered by display name. Missing roots are skipped. Malformed pets are
     /// skipped.
     /// </summary>
-    public static async Task<IReadOnlyList<PetCatalogEntry>> DiscoverAsync(params string[] roots)
+    public static Task<IReadOnlyList<PetCatalogEntry>> DiscoverAsync(params string[] roots)
+        => DiscoverAsync(Directory.EnumerateDirectories, roots);
+
+    internal static async Task<IReadOnlyList<PetCatalogEntry>> DiscoverAsync(Func<string, IEnumerable<string>> enumerateDirectories, params string[] roots)
     {
         var entries = new List<PetCatalogEntry>();
         var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -27,26 +30,33 @@ public static class PetCatalog
                 continue;
             }
 
-            foreach (string dir in Directory.EnumerateDirectories(root))
+            try
             {
-                string json = Path.Combine(dir, "pet.json");
-                if (!File.Exists(json))
+                foreach (string dir in enumerateDirectories(root))
                 {
-                    continue;
-                }
-
-                try
-                {
-                    PetDefinition def = await PetDefinitionLoader.LoadAsync(dir).ConfigureAwait(false);
-                    if (seenIds.Add(def.Id))
+                    string json = Path.Combine(dir, "pet.json");
+                    if (!File.Exists(json))
                     {
-                        entries.Add(new PetCatalogEntry(def.Id, def.DisplayName, dir));
+                        continue;
+                    }
+
+                    try
+                    {
+                        PetDefinition def = await PetDefinitionLoader.LoadAsync(dir).ConfigureAwait(false);
+                        if (seenIds.Add(def.Id))
+                        {
+                            entries.Add(new PetCatalogEntry(def.Id, def.DisplayName, dir));
+                        }
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or ArgumentException)
+                    {
+                        // Skip malformed pet folders.
                     }
                 }
-                catch
-                {
-                    // Skip malformed pet folders.
-                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Keep healthy entries already discovered, and continue with the next root.
             }
         }
 
