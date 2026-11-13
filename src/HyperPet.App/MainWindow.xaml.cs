@@ -80,6 +80,7 @@ public partial class MainWindow : Window
     private int _debugTotalAlerts;
     private string _debugStatus = "starting";
     private bool _debugOverlayHidden;
+    private bool _debugModeWasEnabled;
 
     public MainWindow(
         HyperPetSettings settings,
@@ -98,7 +99,8 @@ public partial class MainWindow : Window
         string? userPetsRoot = null,
         Func<Task<IReadOnlyList<PetCatalogEntry>>>? rediscoverPets = null,
         Action? requestShutdown = null,
-        Func<IReadOnlyList<DesktopMonitor>>? monitorProvider = null, bool canManageStartup = true)
+        Func<IReadOnlyList<DesktopMonitor>>? monitorProvider = null, bool canManageStartup = true,
+        Func<CancellationToken, Task>? scanInAppNow = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
@@ -119,6 +121,7 @@ public partial class MainWindow : Window
         _petLoader = petLoader;
         _userPetsRoot = userPetsRoot ?? string.Empty;
         _rediscoverPets = rediscoverPets;
+        _scanInAppNow = scanInAppNow;
 
         InitializeComponent();
         InitializeNotificationWindow();
@@ -135,6 +138,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _closed = true;
+            _debugTestCancellation?.Cancel();
             _settingsWindow?.Close();
             ++_petReloadGeneration;
             CloseNotificationWindow();
@@ -887,7 +891,8 @@ public partial class MainWindow : Window
                 _petCatalog,
                 _userPetsRoot,
                 _rediscoverPets, canManageStartup: _canManageStartup,
-                preparePet: PreparePetReloadAsync, canCommitPet: CanCommitPreparedPet, commitPet: CommitPreparedPet)
+                preparePet: PreparePetReloadAsync, canCommitPet: CanCommitPreparedPet, commitPet: CommitPreparedPet,
+                toggleDebugMode: ToggleDebugMode, runDebugTest: RunDebugNotificationTestAsync)
             {
                 Owner = this
             };
@@ -918,6 +923,7 @@ public partial class MainWindow : Window
     private void RefreshFromSettings()
     {
         if (_tuckingAway) { return; }
+        if (!_settings.DebugMode) _debugTestCancellation?.Cancel();
         RefreshNotificationPreferences();
         // Called by SettingsWindow on Save or Apply. Persists the new values
         // and pushes them into the running app (pet size, behavior, debug
@@ -1031,6 +1037,8 @@ public partial class MainWindow : Window
 
     private void ApplyDebugOverlayVisibility()
     {
+        if (_settings.DebugMode && !_debugModeWasEnabled) _debugOverlayHidden = false;
+        _debugModeWasEnabled = _settings.DebugMode;
         bool showOverlay = _settings.DebugMode && !_debugOverlayHidden;
 
         if (showOverlay)
@@ -1071,11 +1079,15 @@ public partial class MainWindow : Window
         return string.Join(
             Environment.NewLine,
             "Debug keys (focus pet, Debug on):",
+            $"  {DebugModeShortcut.GestureText}  toggle Debug mode",
             "  1   poll-soon 5s (one-shot)",
             "  2   set interval 2s",
             "  3   set interval 30s",
             "  4   toggle this help",
             "  5   toggle overlay pill",
+            "  6   long in-app test",
+            "  7   Vietnamese/emoji test",
+            "  8   burst of 3 in-app tests",
             "  9   simulate messenger toast",
             "  0   simulate generic toast",
             "  F1  sprite frame prev",
@@ -1112,47 +1124,11 @@ public partial class MainWindow : Window
             $"next poll: {seconds}s  |  last: {_debugLastPollCount}  |  alerts: {_debugTotalAlerts}  |  {_debugStatus}";
     }
 
-    private void TrySimulateNotification(bool messaging)
+    private async void TrySimulateNotification(bool messaging)
     {
-        if (messaging)
-        {
-            // Press 9: spawn an in-process popup mimicking a Zalo-style toast
-            // (small, topmost, no taskbar entry). The InAppNotificationWatcher
-            // detects it the same way it detects real Zalo popups. This bypasses
-            // the Windows toast pipeline entirely, so the OS does not show a
-            // notification of its own.
-            try
-            {
-                var popup = new DebugSimulatedPopupWindow(
-                    sender: "Sky Breaking Master",
-                    preview: "Where are you, my disciple?",
-                    autoDismissAfter: TimeSpan.FromSeconds(5));
-                popup.Show();
-                ReportPollStatus("sim:inapp popup");
-            }
-            catch (Exception exception)
-            {
-                ReportPollStatus($"sim error: {exception.GetType().Name}");
-            }
-            return;
-        }
-
-        // Press 0: emit a real Windows toast under the generic debug AUMI.
-        if (_debugSimulator is null)
-        {
-            ReportPollStatus("sim N/A");
-            return;
-        }
-
-        try
-        {
-            _debugSimulator.SimulateGenericNotification();
-            ReportPollStatus("sim:generic sent");
-        }
-        catch (Exception exception)
-        {
-            ReportPollStatus($"sim error: {exception.GetType().Name}");
-        }
+        ReportPollStatus(await RunDebugNotificationTestAsync(
+            messaging ? DebugNotificationRoute.InAppPopup : DebugNotificationRoute.WindowsToast,
+            DebugNotificationScenario.Short));
     }
 
     private async Task MaybeAutoCheckForUpdateAsync()
@@ -1258,6 +1234,21 @@ public partial class MainWindow : Window
         Application.Current.Shutdown();
     }
 
+    internal void ToggleDebugMode()
+    {
+        if (_closed || _tuckingAway) return;
+        _settings.DebugMode = !_settings.DebugMode;
+        if (!_settings.DebugMode) _debugTestCancellation?.Cancel();
+        _settingsWindow?.SynchronizeDebugMode();
+        RefreshFromSettings();
+    }
+
+    private void OnDebugShortcutKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_closed || _tuckingAway) return;
+        DebugModeShortcut.TryHandle(e, ToggleDebugMode);
+    }
+
     private void OnWindowKeyDown(object sender, KeyEventArgs e)
     {
         if (_tuckingAway) { e.Handled = true; return; }
@@ -1302,6 +1293,18 @@ public partial class MainWindow : Window
                 ToggleDebugOverlayPill();
                 e.Handled = true;
                 return;
+            case Key.D6:
+            case Key.NumPad6:
+                _ = RunDebugNotificationTestAsync(DebugNotificationRoute.InAppPopup, DebugNotificationScenario.Long);
+                e.Handled = true; return;
+            case Key.D7:
+            case Key.NumPad7:
+                _ = RunDebugNotificationTestAsync(DebugNotificationRoute.InAppPopup, DebugNotificationScenario.Unicode);
+                e.Handled = true; return;
+            case Key.D8:
+            case Key.NumPad8:
+                _ = RunDebugNotificationTestAsync(DebugNotificationRoute.InAppPopup, DebugNotificationScenario.Burst);
+                e.Handled = true; return;
             case Key.D9:
             case Key.NumPad9:
                 TrySimulateNotification(messaging: true);

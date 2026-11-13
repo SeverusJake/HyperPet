@@ -7,6 +7,7 @@ using Microsoft.Win32;
 using System.Windows.Controls;
 using System.Windows.Input;
 using HyperPet.App.Pets;
+using HyperPet.App.Notifications;
 using HyperPet.App.ViewModels;
 using HyperPet.Core.Notifications;
 using HyperPet.Core.Pets;
@@ -22,6 +23,9 @@ public partial class SettingsWindow : Window
     private readonly Action<bool> _applyStartupSetting;
     private readonly bool _canManageStartup;
     private readonly Action? _applySettings;
+    private readonly Action? _toggleDebugMode;
+    private readonly Func<DebugNotificationRoute, DebugNotificationScenario, CancellationToken, Task<string>>? _runDebugTest;
+    private bool _debugSending;
     private readonly ObservableCollection<MessagingAppRuleViewModel> _messagingApps;
     private readonly ObservableCollection<StateSpeedRowViewModel> _stateSpeeds;
     private SpritePet? _spritePet;
@@ -80,12 +84,16 @@ public partial class SettingsWindow : Window
         Func<Task<IReadOnlyList<PetCatalogEntry>>>? rediscoverPets = null, bool canManageStartup = true,
         Func<string, CancellationToken, Task<PreparedPetReload?>>? preparePet = null,
         Func<PreparedPetReload, CancellationToken, bool>? canCommitPet = null,
-        Action<PreparedPetReload>? commitPet = null)
+        Action<PreparedPetReload>? commitPet = null,
+        Action? toggleDebugMode = null,
+        Func<DebugNotificationRoute, DebugNotificationScenario, CancellationToken, Task<string>>? runDebugTest = null)
     {
         _settings = settings;
         _applyStartupSetting = applyStartupSetting;
         _canManageStartup = canManageStartup;
         _applySettings = applySettings;
+        _toggleDebugMode = toggleDebugMode;
+        _runDebugTest = runDebugTest;
         _spritePet = spritePet;
         _originalStateFps = originalStateFps;
         _originalStatePlayMode = originalStatePlayMode;
@@ -98,6 +106,7 @@ public partial class SettingsWindow : Window
         _rediscoverPets = rediscoverPets;
 
         InitializeComponent();
+        DebugModeShortcutHint.Text = $"Apply to save. {DebugModeShortcut.GestureText} toggles immediately while the pet or Settings has focus.";
         Closed += (_, _) => { _closed = true; _lifetime.Cancel(); };
 
         ShowFullContentCheckBox.IsChecked = settings.ShowFullNotificationContent;
@@ -109,6 +118,7 @@ public partial class SettingsWindow : Window
         ReactToWindowsNotificationsCheckBox.IsChecked = settings.ReactToWindowsNotifications;
         ReactToInAppNotificationsCheckBox.IsChecked = settings.ReactToInAppNotifications;
         DebugModeCheckBox.IsChecked = settings.DebugMode;
+        RefreshDebugTestControls();
         PetBehaviorComboBox.SelectedIndex = (int)settings.PetBehaviorMode;
         AlertDurationTextBox.Text = settings.AlertDurationSeconds.ToString();
         PetSizeTextBox.Text = settings.PetSize.ToString();
@@ -551,6 +561,59 @@ public partial class SettingsWindow : Window
         }
     }
 
+    internal void SynchronizeDebugMode()
+    {
+        DebugModeCheckBox.IsChecked = _settings.DebugMode;
+        RefreshDebugTestControls();
+    }
+
+    private void RefreshDebugTestControls()
+    {
+        SendDebugTestButton.IsEnabled = _settings.DebugMode && _runDebugTest is not null && !_debugSending;
+        DebugTestRouteComboBox.IsEnabled = !_debugSending;
+        DebugTestScenarioComboBox.IsEnabled = !_debugSending;
+        if (!_debugSending && !_settings.DebugMode)
+            DebugTestStatusText.Text = "Enable and Apply Debug mode before testing. Other alert settings still apply.";
+        else if (!_debugSending && DebugTestStatusText.Text.StartsWith("Enable and Apply", StringComparison.Ordinal))
+            DebugTestStatusText.Text = "Choose a route and sample, then Send test. Other alert settings still apply.";
+    }
+
+    private async void OnSendDebugTestClick(object sender, RoutedEventArgs e) => await SendDebugTestAsync();
+
+    internal async Task SendDebugTestAsync()
+    {
+        if (_closed || _committing || _debugSending || !_settings.DebugMode || _runDebugTest is null) return;
+        if (DebugTestRouteComboBox.SelectedValue is not DebugNotificationRoute route ||
+            DebugTestScenarioComboBox.SelectedValue is not DebugNotificationScenario scenario) return;
+        _debugSending = true; RefreshDebugTestControls();
+        DebugTestStatusText.Text = "Sending test; waiting for the pet...";
+        try
+        {
+            var result = await _runDebugTest(route, scenario, _lifetime.Token);
+            if (!_closed) DebugTestStatusText.Text = result;
+        }
+        catch (Exception exception) { if (!_closed) DebugTestStatusText.Text = "Test failed: " + exception.Message; }
+        finally { _debugSending = false; if (!_closed) RefreshDebugTestControls(); }
+    }
+
+    internal void ToggleDebugModeFromShortcut()
+    {
+        if (_closed || _committing) return;
+        if (_toggleDebugMode is not null) _toggleDebugMode();
+        else
+        {
+            _settings.DebugMode = !_settings.DebugMode;
+            _applySettings?.Invoke();
+        }
+        SynchronizeDebugMode();
+    }
+
+    private void OnDebugShortcutKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_closed || _committing) return;
+        DebugModeShortcut.TryHandle(e, ToggleDebugModeFromShortcut);
+    }
+
     private void OnResetStateSpeedClick(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement fe && fe.DataContext is StateSpeedRowViewModel row)
@@ -728,6 +791,7 @@ public partial class SettingsWindow : Window
         finally { _committing = false; if (!_closed) IsEnabled = true; }
         if (!committed) return false;
         _applySettings?.Invoke();
+        RefreshDebugTestControls();
         _dirty = false;
         UpdateButtonState();
 

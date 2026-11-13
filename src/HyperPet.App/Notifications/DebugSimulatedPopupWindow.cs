@@ -2,6 +2,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Windows.Interop;
+using System.Collections.Concurrent;
 
 namespace HyperPet.App.Notifications;
 
@@ -13,13 +15,19 @@ namespace HyperPet.App.Notifications;
 /// </summary>
 public sealed class DebugSimulatedPopupWindow : Window
 {
+    private static readonly ConcurrentDictionary<IntPtr, byte> ActiveHandles = new();
+    internal static bool IsDebugPopup(IntPtr handle) => ActiveHandles.ContainsKey(handle);
+
     public DebugSimulatedPopupWindow(string sender, string preview, TimeSpan? autoDismissAfter = null)
     {
-        Title = "HyperPet Debug Popup";
+        // UIA includes the window name before its child text. Use the sender
+        // here so de-duplication retains sender + actual message, not a wrapper title.
+        Title = sender;
         Width = 360;
         Height = 92;
         Topmost = true;
         ShowInTaskbar = false;
+        ShowActivated = false;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -32,6 +40,9 @@ public sealed class DebugSimulatedPopupWindow : Window
         Top = workArea.Bottom - Height - 20;
 
         Content = BuildContent(sender, preview);
+        IntPtr popupHandle = IntPtr.Zero;
+        SourceInitialized += (_, _) => { popupHandle = new WindowInteropHelper(this).Handle; ActiveHandles[popupHandle] = 0; };
+        Closed += (_, _) => ActiveHandles.TryRemove(popupHandle, out _);
 
         if (autoDismissAfter is { } delay)
         {
@@ -45,6 +56,7 @@ public sealed class DebugSimulatedPopupWindow : Window
                 Close();
             };
             Loaded += (_, _) => timer.Start();
+            Closed += (_, _) => timer.Stop();
         }
     }
 

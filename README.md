@@ -40,6 +40,26 @@ dotnet run --project src/HyperPet.App/HyperPet.App.csproj
 
 `dotnet run` is useful for UI smoke testing. Windows notification-listener access may be unavailable without package identity; see Notification Access below.
 
+## Debug mode
+
+Open **Settings → Advanced**, enable **Debug mode**, then click **Apply**.
+Alternatively, focus the pet or its Settings window and press **Ctrl+Alt+D** to
+toggle immediately and save the preference. The shortcut works only inside
+HyperPet; it does not intercept keys in Zalo or other applications. Enabling
+Debug mode shows the diagnostics overlay. With the pet focused, press **4** for
+debug-key help, **5** to hide/show the overlay, or **F1/F2/F3** for animation
+frame/pause controls. Debug mode is available in installed release builds.
+
+In **Settings → Advanced → Test notifications**, select short, long/multiline,
+Vietnamese/emoji, three-message burst, or repeated-content samples, then click
+**Send test**. The result counts messages received by the pipeline and bubbles
+actually presented, and flags decoded-text mismatches. Direct pipeline tests
+skip OS delivery and scanning; in-app tests create real popups for the watcher;
+Windows toast tests require the Windows source and notification access. Normal
+pause, quiet-hours, app rules and content privacy still apply. Closing Settings
+cancels the current test. With the pet focused, **6/7/8/9** send long, Unicode,
+burst and short in-app tests; **0** sends a Windows test toast.
+
 ## Startup and Position
 
 Installed releases can manage **Start with Windows**, on by default for new settings. Development/portable runs do not take over the installed app's autorun entry. Debug builds use `%LOCALAPPDATA%/HyperPet/Dev`; installed/portable releases keep `%APPDATA%/HyperPet`. One process runs per user/profile; later launches activate the existing pet.

@@ -14,6 +14,7 @@
         Topmost="True"
         WindowStyle="None"
         Focusable="True"
+        PreviewKeyDown="OnDebugShortcutKeyDown"
         KeyDown="OnWindowKeyDown">
     <Grid x:Name="RootGrid"
           MouseLeftButtonDown="OnMouseLeftButtonDown"

@@ -14,7 +14,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- WPF owns startup and DPI; WinForms is used only for native helpers/tray. -->
     <NoWarn>$(NoWarn);WFAC010;WFO0003</NoWarn>
-    <Version>0.7.2</Version>
+    <Version>0.7.3</Version>
 
 
 

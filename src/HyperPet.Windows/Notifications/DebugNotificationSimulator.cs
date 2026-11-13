@@ -33,7 +33,9 @@ public sealed class DebugNotificationSimulator
     /// separate AUMI from the app itself so Windows does not suppress the
     /// banner as a self-notification.
     /// </summary>
-    public void SimulateGenericNotification()
+    public void SimulateGenericNotification() => SimulateGenericNotification("System update", "Updates are ready to install.");
+
+    public void SimulateGenericNotification(string title, string body)
     {
         if (!_registered)
         {
@@ -51,7 +53,7 @@ public sealed class DebugNotificationSimulator
         }
 
         XmlDocument document = new();
-        document.LoadXml(BuildToastXml("System update", "Updates are ready to install."));
+        document.LoadXml(BuildToastXml(title, body));
         ToastNotificationManager.CreateToastNotifier(GenericAumi).Show(new ToastNotification(document));
 
         _logger?.Info($"Debug toast emitted aumi='{GenericAumi}'");

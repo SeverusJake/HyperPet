@@ -2,12 +2,14 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:pets="clr-namespace:HyperPet.Core.Pets;assembly=HyperPet.Core"
+        xmlns:notifications="clr-namespace:HyperPet.App.Notifications"
         Title="Settings"
         Width="500"
         Height="640"
         Icon="/HyperPet;component/Assets/HyperPet.ico"
         MinWidth="420" MinHeight="240"
-        ResizeMode="CanResize">
+        ResizeMode="CanResize"
+        PreviewKeyDown="OnDebugShortcutKeyDown">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -268,7 +270,33 @@
                               HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="12">
                         <CheckBox x:Name="DebugModeCheckBox"
-                                  Content="Debug" />
+                                  Content="Debug mode"
+                                  ToolTip="Show polling diagnostics and animation debug controls." />
+                        <TextBlock x:Name="DebugModeShortcutHint"
+                                   Margin="0,6,0,0"
+                                   TextWrapping="Wrap" />
+
+                        <StackPanel Margin="0,14,0,0">
+                            <TextBlock Text="Test notifications" FontWeight="SemiBold" />
+                            <TextBlock Margin="0,6,0,4" Text="Delivery route" />
+                            <ComboBox x:Name="DebugTestRouteComboBox" SelectedIndex="1" SelectedValuePath="Tag">
+                                <ComboBoxItem Content="Direct pipeline (no OS or watcher)" Tag="{x:Static notifications:DebugNotificationRoute.Direct}" />
+                                <ComboBoxItem Content="In-app popup (real watcher)" Tag="{x:Static notifications:DebugNotificationRoute.InAppPopup}" />
+                                <ComboBoxItem Content="Windows toast (permission required)" Tag="{x:Static notifications:DebugNotificationRoute.WindowsToast}" />
+                            </ComboBox>
+                            <TextBlock Margin="0,8,0,4" Text="Message sample" />
+                            <ComboBox x:Name="DebugTestScenarioComboBox" SelectedIndex="0" SelectedValuePath="Tag">
+                                <ComboBoxItem Content="Short message" Tag="{x:Static notifications:DebugNotificationScenario.Short}" />
+                                <ComboBoxItem Content="Long, multiple lines" Tag="{x:Static notifications:DebugNotificationScenario.Long}" />
+                                <ComboBoxItem Content="Vietnamese and emoji" Tag="{x:Static notifications:DebugNotificationScenario.Unicode}" />
+                                <ComboBoxItem Content="Burst of 3 messages" Tag="{x:Static notifications:DebugNotificationScenario.Burst}" />
+                                <ComboBoxItem Content="Same content, twice" Tag="{x:Static notifications:DebugNotificationScenario.Repeated}" />
+                            </ComboBox>
+                            <Button x:Name="SendDebugTestButton" Margin="0,8,0,0" Padding="10,4"
+                                    HorizontalAlignment="Left" Content="Send test" Click="OnSendDebugTestClick" />
+                            <TextBlock x:Name="DebugTestStatusText" Margin="0,6,0,0" TextWrapping="Wrap"
+                                       Text="Enable and Apply Debug mode before testing. Other alert settings still apply." />
+                        </StackPanel>
 
                         <StackPanel Margin="0,16,0,0">
                             <TextBlock Text="Alert duration (seconds)" />

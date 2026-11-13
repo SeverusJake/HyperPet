@@ -177,7 +177,8 @@ public partial class App : Application
             LoadPetByIdAsync,
             _userPetsRoot,
             () => PetCatalog.DiscoverAsync(_builtinPetsRoot, _userPetsRoot),
-            canManageStartup: _canApplyStartup && _launchContext.CanManageStartup);
+            canManageStartup: _canApplyStartup && _launchContext.CanManageStartup,
+            scanInAppNow: token => _inAppWatcher?.ScanNowAsync(token) ?? Task.CompletedTask);
         _mainWindow.Show();
 
         _trayIcon = new TrayIcon(
@@ -380,12 +381,14 @@ public partial class App : Application
         PetAlert? alert = petController.HandleNotification(notification, settings);
         if (alert is null)
         {
+            _mainWindow?.ObserveDebugNotification(notification, false);
             return;
         }
 
         try
         {
-            _mainWindow?.ShowAlert(alert);
+            bool shown = _mainWindow?.TryShowAlert(alert) == true;
+            _mainWindow?.ObserveDebugNotification(notification, shown);
         }
         catch (Exception uiException)
         {

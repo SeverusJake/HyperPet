@@ -48,7 +48,7 @@ public sealed class InAppNotificationWatcher : IDisposable
 
     private readonly AutomationWorker _worker = new();
     private volatile bool _running;
-    private bool _scanning;
+    private Task? _scanTask;
     private int _generation;
     private int _scanGeneration;
     private readonly PopupOccurrenceTracker _occurrences = new();
@@ -69,7 +69,7 @@ public sealed class InAppNotificationWatcher : IDisposable
         {
             Interval = TimeSpan.FromSeconds(2)
         };
-        _timer.Tick += async (_, _) => await ScanAsync();
+        _timer.Tick += async (_, _) => { if (_scanTask is not { IsCompleted: false }) await ScanAsync(); };
     }
 
     /// <summary>
@@ -130,10 +130,24 @@ public sealed class InAppNotificationWatcher : IDisposable
         _worker.Dispose();
     }
 
-    private async Task ScanAsync()
+    internal async Task ScanNowAsync(CancellationToken token = default)
     {
-        if (!_running || _scanning) return;
-        _scanning = true;
+        // Finish an older scan, then scan the newly created test popup. Reusing
+        // only the old result could miss it when the regular interval is long.
+        if (_scanTask is { IsCompleted: false }) await _scanTask.WaitAsync(token);
+        token.ThrowIfCancellationRequested();
+        await ScanAsync().WaitAsync(token);
+    }
+
+    private Task ScanAsync()
+    {
+        if (!_running) return Task.CompletedTask;
+        if (_scanTask is { IsCompleted: false }) return _scanTask;
+        return _scanTask = ScanCoreAsync();
+    }
+
+    private async Task ScanCoreAsync()
+    {
         int generation = Volatile.Read(ref _generation);
         try
         {
@@ -146,7 +160,6 @@ public sealed class InAppNotificationWatcher : IDisposable
         }
         catch (OperationCanceledException) { }
         catch (Exception exception) { _logger?.Warn("Popup scan failed", exception); }
-        finally { _scanning = false; }
     }
 
     private void Scan()
@@ -186,6 +199,11 @@ public sealed class InAppNotificationWatcher : IDisposable
                     return true;
                 }
 
+                bool isSelfProc = string.Equals(processName, _selfProcessName, StringComparison.OrdinalIgnoreCase);
+                // Debug mode watches this process only for explicitly generated
+                // test popups. Never re-ingest the pet's own bubble/help/settings.
+                if (isSelfProc && !DebugSimulatedPopupWindow.IsDebugPopup(hwnd)) return true;
+
                 if (!IsPopupCandidate(hwnd))
                 {
                     return true;
@@ -204,7 +222,6 @@ public sealed class InAppNotificationWatcher : IDisposable
 
                 // Resolve display name first so ExtractText can filter the
                 // app name out as junk.
-                bool isSelfProc = string.Equals(processName, _selfProcessName, StringComparison.OrdinalIgnoreCase);
                 string appName = isSelfProc ? "Sim" : processName;
 
                 var (title, body) = ExtractText(hwnd, appName);

@@ -12,6 +12,7 @@ public partial class MainWindow
     private HistoryWindow? _historyWindow;
 
     public void ShowAlert(PetAlert alert) => QueueAlert(alert, recordHistory: true);
+    internal bool TryShowAlert(PetAlert alert) => QueueAlert(alert, recordHistory: true);
 
     private bool QueueAlert(PetAlert alert, bool recordHistory)
     {
