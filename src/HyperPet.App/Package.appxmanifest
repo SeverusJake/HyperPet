@@ -11,7 +11,7 @@
   <Identity
     Name="HyperPet.App"
     Publisher="CN=HyperPet"
-    Version="0.7.1.0" />
+    Version="0.7.2.0" />
 
   <Properties>
     <DisplayName>HyperPet</DisplayName>
