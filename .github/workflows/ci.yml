@@ -27,7 +27,7 @@ jobs:
           }
       - name: Release safeguard tests
         shell: pwsh
-        run: ./tests/ReleaseScripts.Tests.ps1
+        run: ./tests/ReleaseScripts.Process.Tests.ps1
       - name: Verify self-contained publish
         run: dotnet publish src/HyperPet.App/HyperPet.App.csproj -c Release -r win-x64 --self-contained true -o publish/ci
       - uses: actions/upload-artifact@v4

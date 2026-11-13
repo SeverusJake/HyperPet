@@ -37,3 +37,6 @@ try {
     Remove-Item -LiteralPath $sandbox -Recurse -Force
 }
 Write-Host '3 PowerShell regression groups passed.'
+# Expected native failures leave LASTEXITCODE nonzero. Report success only
+# after every assertion and sandbox cleanup has completed.
+exit 0
